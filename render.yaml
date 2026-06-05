@@ -1,0 +1,61 @@
+# =====================================================================
+#  PanAfricanMines — Render Blueprint (Ein-Klick-Einrichtung)
+#  Diese Datei richtet bei Render automatisch ein:
+#    1) eine verwaltete PostgreSQL-Datenbank
+#    2) den Backend-Dienst (Docker) mit HTTPS-Adresse
+#  Die Datenbank wird beim ersten Start automatisch eingerichtet
+#  (RUN_MIGRATIONS_ON_BOOT + SEED_ON_BOOT = true).
+# =====================================================================
+
+databases:
+  - name: panafricanmines-db
+    plan: free
+
+services:
+  - type: web
+    name: panafricanmines-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Datenbank-Verbindung kommt automatisch von der Datenbank oben:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: panafricanmines-db
+          property: connectionString
+      - key: PGSSLMODE
+        value: require
+      # Sicherheits-Schlüssel wird automatisch generiert:
+      - key: JWT_SECRET
+        generateValue: true
+      # Datenbank beim ersten Start automatisch einrichten:
+      - key: RUN_MIGRATIONS_ON_BOOT
+        value: "true"
+      - key: SEED_ON_BOOT
+        value: "true"
+      # Keine Beispiel-/Demodaten in der Live-Umgebung:
+      - key: SEED_SAMPLE_LISTINGS
+        value: "false"
+      - key: MATCHING_FEE_RATE
+        value: "0.10"
+      # --- DIESE WERDEN BEIM EINRICHTEN ABGEFRAGT --------------------
+      # Adresse deiner Website (z. B. https://www.deine-domain.de)
+      - key: CORS_ORIGIN
+        sync: false
+      # Login der Verwaltung (E-Mail + Passwort, frei wählbar)
+      - key: SEED_OPERATOR_EMAIL
+        sync: false
+      - key: SEED_OPERATOR_PASSWORD
+        sync: false
+      - key: SEED_OPERATOR_NAME
+        value: Platform Operator
+      # Adresse deiner Website (für Links in E-Mails)
+      - key: PUBLIC_SITE_URL
+        sync: false
+      # Postfach für Benachrichtigungen (kann gleiche E-Mail sein)
+      - key: OPS_NOTIFY_EMAIL
+        sync: false
