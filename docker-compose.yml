@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pam}
+      POSTGRES_DB: panafricanmines
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pam -d panafricanmines"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Not published to the host by default; the API talks to it over the
+    # internal network. Uncomment to inspect locally.
+    # ports:
+    #   - "5432:5432"
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_URL: postgres://pam:${POSTGRES_PASSWORD:-pam}@db:5432/panafricanmines
+      PGSSLMODE: disable
+      # CHANGE THESE before any real deployment:
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      RUN_MIGRATIONS_ON_BOOT: "true"
+      SEED_ON_BOOT: "true"
+      SEED_OPERATOR_EMAIL: ${SEED_OPERATOR_EMAIL:-ops@stramin.africa}
+      SEED_OPERATOR_PASSWORD: ${SEED_OPERATOR_PASSWORD:-change-me-now}
+      SEED_SAMPLE_LISTINGS: ${SEED_SAMPLE_LISTINGS:-false}
+      MATCHING_FEE_RATE: "0.10"
+      # Email (leave SMTP_HOST empty to log emails instead of sending):
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-PanAfricanMines <no-reply@panafricanmines.com>}
+      OPS_NOTIFY_EMAIL: ${OPS_NOTIFY_EMAIL:-}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://panafricanmines.com}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

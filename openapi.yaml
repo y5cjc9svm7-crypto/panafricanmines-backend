@@ -1,0 +1,485 @@
+openapi: 3.0.3
+info:
+  title: PanAfricanMines API
+  version: 1.0.0
+  description: >
+    Backend API for the PanAfricanMines marketplace (operated by StraMin Africa
+    Zambia Limited). Matches sellers and buyers of mining licences and assets
+    across Africa. All endpoints are served under the /api/v1 base path.
+servers:
+  - url: https://api.panafricanmines.com/api/v1
+    description: Production (adjust to your deployed host)
+  - url: http://localhost:8080/api/v1
+    description: Local development
+tags:
+  - name: Reference
+  - name: Listings
+  - name: Explore
+  - name: Alerts
+  - name: Auth
+  - name: Operator
+  - name: Ops
+
+paths:
+  /reference:
+    get:
+      tags: [Reference]
+      summary: Reference data for all dropdowns and filters
+      responses:
+        '200':
+          description: Reference data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commodityFamilies:
+                    type: array
+                    items: { type: object }
+                  countries:
+                    type: array
+                    items: { type: object }
+                  districts: { type: object }
+                  assetTypes: { type: array, items: { type: string } }
+                  licences: { type: array, items: { type: string } }
+                  stages: { type: array, items: { type: string } }
+                  areas: { type: array, items: { type: string } }
+                  prices: { type: array, items: { type: object } }
+
+  /listings:
+    get:
+      tags: [Listings]
+      summary: Search public listings
+      parameters:
+        - { in: query, name: q, schema: { type: string }, description: Free-text search }
+        - { in: query, name: commodity, schema: { type: string } }
+        - { in: query, name: country, schema: { type: string } }
+        - { in: query, name: licence, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string, enum: [Live, Under offer] } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 24 } }
+      responses:
+        '200':
+          description: Paginated, filtered public listings with facets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicListing' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  facets: { type: object }
+    post:
+      tags: [Listings]
+      summary: Submit an asset ("Sell an asset")
+      description: >
+        Requires a signed engagement letter. The created listing starts as
+        "Pending review" and is not publicly visible until an operator publishes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateListing' }
+      responses:
+        '201':
+          description: Listing created (Pending review)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicListing' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /listings/{id}:
+    get:
+      tags: [Listings]
+      summary: Get a single public listing
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string }, example: PAM-ZM-0001 }
+      responses:
+        '200':
+          description: A public listing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicListing' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /listings/{id}/contact-requests:
+    post:
+      tags: [Listings]
+      summary: Buyer requests contact about a listing
+      description: Allowed only when the listing is Live or Under offer.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactRequest' }
+      responses:
+        '201': { description: Contact request recorded }
+        '409': { description: Listing is not open for contact }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /explore:
+    get:
+      tags: [Explore]
+      summary: Market aggregates for the heatmap
+      responses:
+        '200':
+          description: Region x family and region x country matrices plus totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  regionFamily: { type: object }
+                  regionCountry: { type: object }
+
+  /alerts:
+    post:
+      tags: [Alerts]
+      summary: Create an email alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAlert' }
+      responses:
+        '201':
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  unsubscribeUrl: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [Alerts]
+      summary: List a subscriber's alerts
+      parameters:
+        - { in: query, name: email, required: true, schema: { type: string, format: email } }
+      responses:
+        '200':
+          description: Alerts for the email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts: { type: array, items: { type: object } }
+
+  /alerts/unsubscribe:
+    get:
+      tags: [Alerts]
+      summary: One-click unsubscribe (link target used in alert emails)
+      parameters:
+        - { in: query, name: token, required: true, schema: { type: string } }
+      responses:
+        '200': { description: HTML confirmation page }
+
+  /alerts/{token}:
+    delete:
+      tags: [Alerts]
+      summary: Delete an alert by its token
+      parameters:
+        - { in: path, name: token, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Deleted }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Operator login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: JWT issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  operator: { $ref: '#/components/schemas/Operator' }
+        '401': { description: Invalid credentials }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current operator
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Operator profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operator: { $ref: '#/components/schemas/Operator' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/stats:
+    get:
+      tags: [Operator]
+      summary: Dashboard tiles
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Stats }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/listings:
+    get:
+      tags: [Operator]
+      summary: Operator review queue
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - in: query
+          name: status
+          schema: { type: string, enum: [Pending review, Live, Under offer, Closed, Declined, All], default: All }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 50 } }
+      responses:
+        '200':
+          description: Listings (operator view, includes counts)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/OperatorListing' } }
+                  total: { type: integer }
+                  counts: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/listings/{id}:
+    get:
+      tags: [Operator]
+      summary: Full operator detail (engagement letter + contact requests)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Operator listing detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperatorListing' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /operator/listings/{id}/publish:
+    post:
+      tags: [Operator]
+      summary: Publish (Pending review -> Live)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated listing }
+        '409': { description: Invalid status transition }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/listings/{id}/decline:
+    post:
+      tags: [Operator]
+      summary: Decline (Pending review -> Declined)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Updated listing }
+        '409': { description: Invalid status transition }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/listings/{id}/offer:
+    post:
+      tags: [Operator]
+      summary: Mark under offer (Live -> Under offer)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated listing }
+        '409': { description: Invalid status transition }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/listings/{id}/close:
+    post:
+      tags: [Operator]
+      summary: Close a deal (Under offer -> Closed) and invoice the matching fee
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transactionValue:
+                  type: integer
+                  description: Optional override of the value used to compute the fee (defaults to the listing price).
+      responses:
+        '200':
+          description: Closed listing with feeInvoiced set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperatorListing' }
+        '409': { description: Invalid status transition }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /operator/contact-requests:
+    get:
+      tags: [Operator]
+      summary: All buyer contact requests
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: Contact requests }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /healthz:
+    get:
+      tags: [Ops]
+      summary: Liveness probe
+      responses:
+        '200': { description: OK }
+  /readyz:
+    get:
+      tags: [Ops]
+      summary: Readiness probe (checks the database)
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not ready }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many requests
+  schemas:
+    PublicListing:
+      type: object
+      properties:
+        id: { type: string, example: PAM-ZM-0001 }
+        name: { type: string }
+        assetType: { type: string }
+        commodity: { type: string }
+        family: { type: string }
+        country: { type: string }
+        region: { type: string }
+        district: { type: string }
+        licence: { type: string }
+        area: { type: integer, nullable: true }
+        stage: { type: string }
+        priceLabel: { type: string }
+        priceVal: { type: integer, nullable: true }
+        status: { type: string, enum: [Live, Under offer] }
+        createdAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+    OperatorListing:
+      allOf:
+        - $ref: '#/components/schemas/PublicListing'
+        - type: object
+          properties:
+            contactEmail: { type: string, nullable: true }
+            feeInvoiced: { type: integer, nullable: true }
+            status: { type: string, enum: [Pending review, Live, Under offer, Closed, Declined] }
+            engagementLetter: { type: object, nullable: true }
+            contactRequests: { type: array, items: { type: object } }
+    CreateListing:
+      type: object
+      required: [assetType, commodity, country, location, licence, engagementLetter]
+      properties:
+        assetType: { type: string }
+        commodity: { type: string }
+        country: { type: string }
+        location: { type: string, description: District / location }
+        licence: { type: string }
+        area: { type: string }
+        stage: { type: string }
+        price: { type: string, description: Price band label }
+        email: { type: string, format: email }
+        engagementLetter:
+          type: object
+          required: [accepted, signature]
+          properties:
+            accepted: { type: boolean, enum: [true] }
+            signature:
+              type: string
+              description: PNG data URL of the drawn signature
+              example: data:image/png;base64,iVBORw0KG...
+            termsVersion: { type: string, example: '2026-05-19' }
+    ContactRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        name: { type: string }
+        message: { type: string }
+    CreateAlert:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        commodity: { type: string }
+        country: { type: string }
+        licence: { type: string }
+    Operator:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message: { type: string }
+            details: { type: object }

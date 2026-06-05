@@ -1,0 +1,260 @@
+import { query, withTransaction } from '../db/pool.js';
+import { HttpError } from '../middleware/error.js';
+import { nextListingId, uuid } from '../lib/ids.js';
+import { matchingFee, priceBandToValue, parseAreaHa, formatUSD } from '../lib/money.js';
+import config from '../config.js';
+import logger from '../lib/logger.js';
+import { resolveCommodityFamily, resolveCountry, getReference } from './referenceService.js';
+import { notifyAlertsForListing } from './alertService.js';
+import { sendMail } from '../lib/mailer.js';
+import { listingSubmittedEmail, newSubmissionOpsEmail } from './emailTemplates.js';
+
+const PUBLIC_STATUSES = ['Live', 'Under offer'];
+
+// Map a DB row to the public API shape (camelCase; no internal fields).
+export function toPublic(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    assetType: row.asset_type,
+    commodity: row.commodity,
+    family: row.family,
+    country: row.country,
+    region: row.region,
+    district: row.district,
+    licence: row.licence,
+    area: row.area_ha,
+    stage: row.stage,
+    priceLabel: row.price_label,
+    priceVal: row.price_val == null ? null : Number(row.price_val),
+    status: row.status,
+    createdAt: row.created_at,
+    publishedAt: row.published_at,
+  };
+}
+
+// Operator view exposes everything.
+export function toOperator(row) {
+  return {
+    ...toPublic(row),
+    contactEmail: row.contact_email,
+    feeInvoiced: row.fee_invoiced == null ? null : Number(row.fee_invoiced),
+    declineReason: row.decline_reason,
+    updatedAt: row.updated_at,
+    closedAt: row.closed_at,
+  };
+}
+
+// ── Public listing search ───────────────────────────────────────────────
+export async function listPublic(filters) {
+  const where = [`status = ANY($1)`];
+  const params = [PUBLIC_STATUSES];
+  let i = 2;
+
+  if (filters.status) { where.push(`status = $${i++}`); params.push(filters.status); }
+  if (filters.commodity && filters.commodity !== 'All') { where.push(`commodity = $${i++}`); params.push(filters.commodity); }
+  if (filters.country && filters.country !== 'All') { where.push(`country = $${i++}`); params.push(filters.country); }
+  if (filters.licence && filters.licence !== 'All') { where.push(`licence = $${i++}`); params.push(filters.licence); }
+  if (filters.q) {
+    where.push(`(name ILIKE $${i} OR id ILIKE $${i} OR district ILIKE $${i} OR country ILIKE $${i})`);
+    params.push(`%${filters.q}%`); i++;
+  }
+
+  const whereSql = where.join(' AND ');
+  const offset = (filters.page - 1) * filters.limit;
+
+  const totalQ = await query(`SELECT count(*)::int AS c FROM listings WHERE ${whereSql}`, params);
+  const rowsQ = await query(
+    `SELECT * FROM listings WHERE ${whereSql}
+       ORDER BY published_at DESC NULLS LAST, created_at DESC
+       LIMIT $${i++} OFFSET $${i++}`,
+    [...params, filters.limit, offset]
+  );
+
+  // Facets reflect the full public pool (so the dropdowns list everything available).
+  const facetsQ = await query(
+    `SELECT 'commodity' AS k, commodity AS v FROM listings WHERE status = ANY($1)
+     UNION ALL SELECT 'country', country FROM listings WHERE status = ANY($1)
+     UNION ALL SELECT 'licence', licence FROM listings WHERE status = ANY($1)`,
+    [PUBLIC_STATUSES]
+  );
+  const facets = { commodities: new Set(), countries: new Set(), licences: new Set() };
+  for (const r of facetsQ.rows) {
+    if (r.k === 'commodity') facets.commodities.add(r.v);
+    else if (r.k === 'country') facets.countries.add(r.v);
+    else facets.licences.add(r.v);
+  }
+
+  return {
+    items: rowsQ.rows.map(toPublic),
+    total: totalQ.rows[0].c,
+    page: filters.page,
+    limit: filters.limit,
+    facets: {
+      commodities: [...facets.commodities].sort(),
+      countries: [...facets.countries].sort(),
+      licences: [...facets.licences].sort(),
+    },
+  };
+}
+
+export async function getPublicById(id) {
+  const { rows } = await query(`SELECT * FROM listings WHERE id = $1 AND status = ANY($2)`, [id, PUBLIC_STATUSES]);
+  if (!rows.length) throw new HttpError(404, 'Listing not found');
+  return toPublic(rows[0]);
+}
+
+// ── Submission ("Sell an asset") ────────────────────────────────────────
+export async function createListing(input, meta = {}) {
+  const family = await resolveCommodityFamily(input.commodity);
+  const { region, cc } = await resolveCountry(input.country);
+  const ref = await getReference();
+  const commodityCode = ref.commodityCode[input.commodity] || input.commodity.slice(0, 2);
+
+  const name =
+    (input.location.split(',')[0] || input.location).trim() +
+    ' ' + commodityCode + ' ' + (input.assetType.split(' ')[0] || 'Asset');
+
+  const priceVal = priceBandToValue(input.price);
+  const areaHa = parseAreaHa(input.area);
+
+  const listing = await withTransaction(async (client) => {
+    const id = await nextListingId(client, cc);
+    const insert = await client.query(
+      `INSERT INTO listings
+        (id, name, asset_type, commodity, family, country, region, district, licence,
+         area_ha, stage, price_label, price_val, status, contact_email)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Pending review',$14)
+       RETURNING *`,
+      [id, name, input.assetType, input.commodity, family, input.country, region,
+       input.location, input.licence, areaHa, input.stage || null,
+       input.price || null, priceVal, input.email || null]
+    );
+    await client.query(
+      `INSERT INTO engagement_letters
+        (id, listing_id, terms_version, accepted, signature_image, ip, user_agent)
+       VALUES ($1,$2,$3,TRUE,$4,$5,$6)`,
+      [uuid(), id, input.engagementLetter.termsVersion, input.engagementLetter.signature,
+       meta.ip || null, meta.userAgent || null]
+    );
+    return insert.rows[0];
+  });
+
+  // Fire-and-forget notifications.
+  if (listing.contact_email) {
+    const m = listingSubmittedEmail(listing);
+    sendMail({ to: listing.contact_email, ...m });
+  }
+  if (config.mail.opsNotify) {
+    const m = newSubmissionOpsEmail(listing);
+    sendMail({ to: config.mail.opsNotify, ...m });
+  }
+
+  return toOperator(listing);
+}
+
+// ── Operator queue ──────────────────────────────────────────────────────
+export async function listForOperator(filters) {
+  const where = [];
+  const params = [];
+  let i = 1;
+  if (filters.status && filters.status !== 'All') { where.push(`status = $${i++}`); params.push(filters.status); }
+  if (filters.q) {
+    where.push(`(name ILIKE $${i} OR id ILIKE $${i} OR country ILIKE $${i})`);
+    params.push(`%${filters.q}%`); i++;
+  }
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const offset = (filters.page - 1) * filters.limit;
+
+  const totalQ = await query(`SELECT count(*)::int AS c FROM listings ${whereSql}`, params);
+  const rowsQ = await query(
+    `SELECT * FROM listings ${whereSql} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`,
+    [...params, filters.limit, offset]
+  );
+  const countsQ = await query(`SELECT status, count(*)::int AS c FROM listings GROUP BY status`);
+  const counts = { 'Pending review': 0, Live: 0, 'Under offer': 0, Closed: 0, Declined: 0 };
+  for (const r of countsQ.rows) counts[r.status] = r.c;
+
+  return { items: rowsQ.rows.map(toOperator), total: totalQ.rows[0].c, page: filters.page, limit: filters.limit, counts };
+}
+
+export async function getForOperator(id) {
+  const { rows } = await query(`SELECT * FROM listings WHERE id = $1`, [id]);
+  if (!rows.length) throw new HttpError(404, 'Listing not found');
+  const listing = toOperator(rows[0]);
+  const eng = await query(
+    `SELECT terms_version, accepted, signature_image, signed_at, ip FROM engagement_letters WHERE listing_id = $1 ORDER BY signed_at DESC LIMIT 1`,
+    [id]
+  );
+  const contacts = await query(
+    `SELECT id, buyer_email, buyer_name, message, status, created_at FROM contact_requests WHERE listing_id = $1 ORDER BY created_at DESC`,
+    [id]
+  );
+  return { ...listing, engagementLetter: eng.rows[0] || null, contactRequests: contacts.rows };
+}
+
+// ── Status transitions ──────────────────────────────────────────────────
+const TRANSITIONS = {
+  publish: { from: ['Pending review'], to: 'Live' },
+  decline: { from: ['Pending review'], to: 'Declined' },
+  offer: { from: ['Live'], to: 'Under offer' },
+  close: { from: ['Under offer'], to: 'Closed' },
+};
+
+async function audit(client, operator, action, listingId, extra) {
+  await client.query(
+    `INSERT INTO audit_log (operator_id, action, listing_id, meta) VALUES ($1,$2,$3,$4)`,
+    [operator?.id || null, action, listingId, extra ? JSON.stringify(extra) : null]
+  );
+}
+
+export async function transition(id, action, operator, opts = {}) {
+  const rule = TRANSITIONS[action];
+  if (!rule) throw new HttpError(400, `Unknown action: ${action}`);
+
+  const updated = await withTransaction(async (client) => {
+    const { rows } = await client.query(`SELECT * FROM listings WHERE id = $1 FOR UPDATE`, [id]);
+    if (!rows.length) throw new HttpError(404, 'Listing not found');
+    const cur = rows[0];
+    if (!rule.from.includes(cur.status)) {
+      throw new HttpError(409, `Cannot ${action} a listing that is "${cur.status}". Allowed from: ${rule.from.join(', ')}.`);
+    }
+
+    let sql, params;
+    if (action === 'publish') {
+      sql = `UPDATE listings SET status='Live', published_at=now(), decline_reason=NULL WHERE id=$1 RETURNING *`;
+      params = [id];
+    } else if (action === 'decline') {
+      sql = `UPDATE listings SET status='Declined', decline_reason=$2 WHERE id=$1 RETURNING *`;
+      params = [id, opts.reason || null];
+    } else if (action === 'offer') {
+      sql = `UPDATE listings SET status='Under offer' WHERE id=$1 RETURNING *`;
+      params = [id];
+    } else {
+      // close: invoice the matching fee
+      const basis = opts.transactionValue != null ? opts.transactionValue : Number(cur.price_val || 0);
+      const fee = matchingFee(basis, config.feeRate);
+      sql = `UPDATE listings SET status='Closed', closed_at=now(), fee_invoiced=$2 WHERE id=$1 RETURNING *`;
+      params = [id, fee];
+    }
+
+    const res = await client.query(sql, params);
+    await audit(client, operator, action, id, opts);
+    return res.rows[0];
+  });
+
+  // Side effects after commit.
+  if (action === 'publish') {
+    notifyAlertsForListing(updated).catch((err) =>
+      logger.error({ err, id }, 'Alert notification failed')
+    );
+  }
+  if (action === 'close') {
+    logger.info(
+      { id, fee: updated.fee_invoiced },
+      `Fee invoiced ${formatUSD(updated.fee_invoiced)} on close of ${id}`
+    );
+  }
+
+  return toOperator(updated);
+}
