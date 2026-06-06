@@ -6,10 +6,13 @@ import {
   operatorListingQuerySchema, declineSchema, closeSchema,
 } from '../validators/schemas.js';
 import {
-  listForOperator, getForOperator, transition,
+  listForOperator, getForOperator, transition, toOperator,
 } from '../services/listingService.js';
 import { operatorStats } from '../services/statsService.js';
 import { listContactRequests } from '../services/contactService.js';
+import { z } from 'zod';
+import { query, withTransaction } from '../db/pool.js';
+import { HttpError } from '../middleware/error.js';
 
 const router = Router();
 
@@ -74,6 +77,65 @@ router.get(
         limit: limit ? Number(limit) : 50,
       }),
     });
+  })
+);
+
+// ── Edit a listing's content (operator) ─────────────────────────────────
+// All fields optional; a blank text field means "leave unchanged".
+const editListingSchema = z
+  .object({
+    name: z.string().trim().max(200).optional(),
+    assetType: z.string().trim().max(120).optional(),
+    commodity: z.string().trim().max(80).optional(),
+    family: z.string().trim().max(80).optional(),
+    country: z.string().trim().max(80).optional(),
+    region: z.string().trim().max(80).optional(),
+    district: z.string().trim().max(160).optional(),
+    licence: z.string().trim().max(120).optional(),
+    area: z.coerce.number().int().min(0).max(100000000).optional(),
+    stage: z.string().trim().max(120).optional(),
+    priceLabel: z.string().trim().max(80).optional(),
+    priceVal: z.coerce.number().int().min(0).optional(),
+  })
+  .strip();
+
+const EDIT_COLS = {
+  name: 'name', assetType: 'asset_type', commodity: 'commodity', family: 'family',
+  country: 'country', region: 'region', district: 'district', licence: 'licence',
+  area: 'area_ha', stage: 'stage', priceLabel: 'price_label', priceVal: 'price_val',
+};
+
+router.post(
+  '/listings/:id/edit',
+  validate(editListingSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const patch = req.body;
+    const sets = [];
+    const params = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(EDIT_COLS)) {
+      if (patch[key] === undefined) continue;
+      let val = patch[key];
+      if (typeof val === 'string') { val = val.trim(); if (val === '') continue; } // blank = no change
+      sets.push(`${col} = $${i++}`);
+      params.push(val);
+    }
+    const updated = await withTransaction(async (client) => {
+      const exist = await client.query('SELECT id FROM listings WHERE id = $1 FOR UPDATE', [id]);
+      if (!exist.rows.length) throw new HttpError(404, 'Listing not found');
+      if (!sets.length) {
+        const cur = await client.query('SELECT * FROM listings WHERE id = $1', [id]);
+        return cur.rows[0];
+      }
+      params.push(id);
+      const upd = await client.query(
+        `UPDATE listings SET ${sets.join(', ')}, updated_at = now() WHERE id = $${i} RETURNING *`,
+        params
+      );
+      return upd.rows[0];
+    });
+    res.json(toOperator(updated));
   })
 );
 
