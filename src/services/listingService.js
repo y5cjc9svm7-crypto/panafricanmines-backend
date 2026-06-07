@@ -28,6 +28,7 @@ export function toPublic(row) {
     priceLabel: row.price_label,
     priceVal: row.price_val == null ? null : Number(row.price_val),
     status: row.status,
+    verified: row.verified === true,
     createdAt: row.created_at,
     publishedAt: row.published_at,
   };
