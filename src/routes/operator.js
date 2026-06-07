@@ -96,6 +96,7 @@ const editListingSchema = z
     stage: z.string().trim().max(120).optional(),
     priceLabel: z.string().trim().max(80).optional(),
     priceVal: z.coerce.number().int().min(0).optional(),
+    verified: z.boolean().optional(),
   })
   .strip();
 
@@ -103,6 +104,7 @@ const EDIT_COLS = {
   name: 'name', assetType: 'asset_type', commodity: 'commodity', family: 'family',
   country: 'country', region: 'region', district: 'district', licence: 'licence',
   area: 'area_ha', stage: 'stage', priceLabel: 'price_label', priceVal: 'price_val',
+  verified: 'verified',
 };
 
 router.post(
