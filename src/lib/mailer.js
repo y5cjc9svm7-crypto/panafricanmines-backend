@@ -1,39 +1,46 @@
-import nodemailer from 'nodemailer';
 import config from '../config.js';
 import logger from '../lib/logger.js';
 
-let transporter;
-
-function getTransporter() {
-  if (transporter) return transporter;
-  if (config.mail.host) {
-    transporter = nodemailer.createTransport({
-      host: config.mail.host,
-      port: config.mail.port,
-      secure: config.mail.secure,
-      auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
-    });
-  } else {
-    // Dev/test fallback: don't send, just log a JSON envelope.
-    transporter = nodemailer.createTransport({ jsonTransport: true });
-    logger.warn('SMTP not configured — emails will be logged, not delivered.');
-  }
-  return transporter;
-}
+// Resend sends over HTTPS (port 443), which cloud platforms like Render do not
+// block — unlike SMTP ports 25/465/587. The API key comes from the
+// RESEND_API_KEY environment variable; the "from" address comes from MAIL_FROM
+// (config.mail.from) and must be on a domain you have verified in Resend.
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 export async function sendMail({ to, subject, text, html }) {
   if (!to) return { skipped: true };
+
+  if (!RESEND_API_KEY) {
+    logger.warn({ to, subject }, 'RESEND_API_KEY not set — email not sent.');
+    return { skipped: true };
+  }
+
   try {
-    const info = await getTransporter().sendMail({
-      from: config.mail.from,
-      to,
-      subject,
-      text,
-      html,
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: config.mail.from,
+        to: [to],
+        subject,
+        text,
+        html,
+      }),
     });
-    if (info.message) logger.info({ to, subject, body: info.message.toString() }, 'Email (dev transport)');
-    else logger.info({ to, subject, messageId: info.messageId }, 'Email sent');
-    return info;
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      logger.error({ status: res.status, data, to, subject }, 'Email send failed');
+      return { error: true };
+    }
+
+    logger.info({ to, subject, id: data.id }, 'Email sent');
+    return data;
   } catch (err) {
     logger.error({ err, to, subject }, 'Email send failed');
     return { error: true };
