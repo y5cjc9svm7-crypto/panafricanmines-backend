@@ -109,7 +109,7 @@ export function feeInvoiceNote(listing) {
 }
 
 export function listingPublishedEmail(listing) {
-  const url = `${site}/#/listings/${listing.id}`;
+  const url = `${site}/?listing=${encodeURIComponent(listing.id)}`;
   const subject = `Your listing is now live on PanAfricanMines — ${listing.name} (${listing.id})`;
 
   const text =
