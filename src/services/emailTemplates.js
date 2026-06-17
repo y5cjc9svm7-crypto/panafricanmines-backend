@@ -123,7 +123,7 @@ export function listingPublishedEmail(listing) {
     `Independent verification costs just US$25 (one-off).\n\n` +
     `Standard listing: no badge, shown as normal.\n` +
     `Independently verified (US$25): "Independently verified" badge, visually highlighted and stands out, greater credibility.\n\n` +
-    `To request verification, simply reply to this email and we'll tell you which supporting details we need.\n\n` +
+    `To request verification, simply send an email to mark@panafricanmines.com and we'll tell you which supporting details we need.\n\n` +
     `Kind regards,\nPanAfricanMines\nby StraMin Africa Zambia Limited\n\n` +
     `———————————————————————\n\n` +
     `Bonjour,\n\n` +
@@ -136,7 +136,7 @@ export function listingPublishedEmail(listing) {
     `La vérification indépendante ne coûte que 25 US$ (paiement unique).\n\n` +
     `Annonce standard : pas de badge, affichage normal.\n` +
     `Vérifiée indépendamment (25 US$) : badge « Independently verified », mise en évidence visuelle, crédibilité accrue.\n\n` +
-    `Pour demander la vérification, répondez simplement à cet e-mail et nous vous indiquerons les justificatifs nécessaires.\n\n` +
+    `Pour demander la vérification, envoyez simplement un e-mail à mark@panafricanmines.com et nous vous indiquerons les justificatifs nécessaires.\n\n` +
     `Cordialement,\nPanAfricanMines\npar StraMin Africa Zambia Limited`;
 
   // Side-by-side comparison (email-safe table). std/ver = arrays of bullet lines.
@@ -168,14 +168,14 @@ export function listingPublishedEmail(listing) {
      <h2 style="font-size:15px;color:#221C18;margin:18px 0 6px">Optional: independent verification by StraMin</h2>
      <p style="font-size:13px;line-height:1.6;color:#2E2620">If you can provide some basic supporting information that makes the key facts of your listing plausible to check (for example licence details, location and ownership), StraMin can carry out a separate, independent verification of your listing. A verified listing then carries the "Independently verified" badge — it stands out visually and tends to attract more attention from buyers, since it signals credibility through StraMin's independent verification of core information. Independent verification costs just <strong>US$25</strong> (one-off).</p>
      ${cmp('Standard listing', ['No badge', 'Shown as normal', 'Standard buyer perception'], 'Independently verified · US$25', 'Independently verified', ['Visually highlighted — stands out', 'Greater credibility, taken more seriously'])}
-     <p style="font-size:13px;color:#7A7064">To request verification, simply reply to this email and we'll tell you which supporting details we need.</p>
+     <p style="font-size:13px;color:#7A7064">To request verification, simply send an email to <a href="mailto:mark@panafricanmines.com" style="color:#A8663C">mark@panafricanmines.com</a> and we'll tell you which supporting details we need.</p>
      <p style="font-size:13px;color:#2E2620;margin-top:16px">Kind regards,<br>PanAfricanMines<br>by StraMin Africa Zambia Limited</p>`;
 
   const fr = `<p style="font-size:14px;line-height:1.6">Bonne nouvelle : votre annonce a été examinée par notre équipe et est désormais en ligne sur PanAfricanMines. Les acheteurs peuvent désormais la trouver et demander une mise en relation ; nous vous informerons dès qu'un acheteur manifestera son intérêt.</p>
      <h2 style="font-size:15px;color:#221C18;margin:18px 0 6px">Option : vérification indépendante par StraMin</h2>
      <p style="font-size:13px;line-height:1.6;color:#2E2620">Si vous pouvez fournir quelques informations de base rendant les éléments clés de votre annonce raisonnablement vérifiables (par exemple les détails de la licence, la localisation et la titularité), StraMin peut effectuer une vérification indépendante distincte de votre annonce. L'annonce vérifiée porte alors le badge « Independently verified » (vérifiée de manière indépendante) : elle se distingue visuellement et tend à attirer davantage l'attention des acheteurs, car elle signale sa crédibilité grâce à la vérification indépendante des informations essentielles par StraMin. La vérification indépendante ne coûte que <strong>25 US$</strong> (paiement unique).</p>
      ${cmp('Annonce standard', ['Pas de badge', 'Affichage normal', 'Perception standard des acheteurs'], 'Vérifiée indépendamment · 25 US$', 'Independently verified', ['Mise en évidence visuelle — se démarque', 'Crédibilité accrue, prise plus au sérieux'])}
-     <p style="font-size:13px;color:#7A7064">Pour demander la vérification, répondez simplement à cet e-mail et nous vous indiquerons les justificatifs nécessaires.</p>
+     <p style="font-size:13px;color:#7A7064">Pour demander la vérification, envoyez simplement un e-mail à <a href="mailto:mark@panafricanmines.com" style="color:#A8663C">mark@panafricanmines.com</a> et nous vous indiquerons les justificatifs nécessaires.</p>
      <p style="font-size:13px;color:#2E2620;margin-top:16px">Cordialement,<br>PanAfricanMines<br>par StraMin Africa Zambia Limited</p>`;
 
   const html = layout(
