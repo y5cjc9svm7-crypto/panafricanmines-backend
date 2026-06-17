@@ -7,7 +7,7 @@ import logger from '../lib/logger.js';
 import { resolveCommodityFamily, resolveCountry, getReference } from './referenceService.js';
 import { notifyAlertsForListing } from './alertService.js';
 import { sendMail } from '../lib/mailer.js';
-import { listingSubmittedEmail, newSubmissionOpsEmail } from './emailTemplates.js';
+import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail } from './emailTemplates.js';
 
 const PUBLIC_STATUSES = ['Live', 'Under offer'];
 
@@ -249,6 +249,11 @@ export async function transition(id, action, operator, opts = {}) {
     notifyAlertsForListing(updated).catch((err) =>
       logger.error({ err, id }, 'Alert notification failed')
     );
+    // Confirm to the seller that their listing is now live.
+    if (updated.contact_email) {
+      const m = listingPublishedEmail(updated);
+      sendMail({ to: updated.contact_email, ...m });
+    }
   }
   if (action === 'close') {
     logger.info(
