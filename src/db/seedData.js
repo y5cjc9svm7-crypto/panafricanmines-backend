@@ -59,7 +59,7 @@ export const COUNTRY_META = {
   Mauritania: { region: 'West Africa', cc: 'MR' },
   Mauritius: { region: 'East Africa', cc: 'MU' },
   Morocco: { region: 'North Africa', cc: 'MA' },
-  Mozambique: { region: 'East Africa', cc: 'MZ' },
+  Mozambique: { region: 'Southern Africa', cc: 'MZ' },
   Namibia: { region: 'Southern Africa', cc: 'NA' },
   Niger: { region: 'West Africa', cc: 'NE' },
   Nigeria: { region: 'West Africa', cc: 'NG' },
@@ -74,7 +74,7 @@ export const COUNTRY_META = {
   Togo: { region: 'West Africa', cc: 'TG' },
   Tunisia: { region: 'North Africa', cc: 'TN' },
   Uganda: { region: 'East Africa', cc: 'UG' },
-  Zambia: { region: 'East Africa', cc: 'ZM' },
+  Zambia: { region: 'Southern Africa', cc: 'ZM' },
   Zimbabwe: { region: 'Southern Africa', cc: 'ZW' },
 };
 
@@ -175,9 +175,9 @@ const FAMILY_COMMS = {
   'Industrial minerals': ['Phosphate', 'Fluorspar', 'Bauxite', 'Limestone', 'Soda ash'],
 };
 const SAMPLE_COUNTRIES = [
-  { name: 'Zambia', region: 'East Africa', cc: 'ZM', districts: DISTRICTS_FORM.Zambia.slice(0, 6) },
+  { name: 'Zambia', region: 'Southern Africa', cc: 'ZM', districts: DISTRICTS_FORM.Zambia.slice(0, 6) },
   { name: 'Tanzania', region: 'East Africa', cc: 'TZ', districts: ['Geita Region', 'Mwanza, Lake Zone', 'Kahama District', 'Chunya, Mbeya'] },
-  { name: 'Mozambique', region: 'East Africa', cc: 'MZ', districts: ['Tete Province', 'Nampula Province', 'Manica Province'] },
+  { name: 'Mozambique', region: 'Southern Africa', cc: 'MZ', districts: ['Tete Province', 'Nampula Province', 'Manica Province'] },
   { name: 'Madagascar', region: 'East Africa', cc: 'MG', districts: ['Atsimo-Andrefana', 'Ihorombe Region'] },
   { name: 'South Africa', region: 'Southern Africa', cc: 'ZA', districts: ['Limpopo, Bushveld', 'Mpumalanga', 'Northern Cape', 'North West Province'] },
   { name: 'Botswana', region: 'Southern Africa', cc: 'BW', districts: ['Ghanzi District', 'Kgalagadi District', 'Central District'] },
@@ -199,10 +199,10 @@ export function buildSampleListings() {
   const r = mulberry32(20260519);
   const pick = (a) => a[Math.floor(r() * a.length)];
   const items = [];
-  items.push({ id: 'PAM-ZM-0001', name: 'Solwezi NW Cu Block', country: 'Zambia', region: 'East Africa', district: 'Solwezi District, NW Province', commodity: 'Copper', family: 'Base metals', licence: 'Large-scale mining licence', area: 1240, stage: 'Resource definition', priceLabel: '$7M–14M', priceVal: 10000000, status: 'Live' });
-  items.push({ id: 'PAM-ZM-0002', name: 'Chingola Copperbelt Concession', country: 'Zambia', region: 'East Africa', district: 'Chingola, Copperbelt', commodity: 'Copper', family: 'Base metals', licence: 'Exploration licence', area: 680, stage: 'Brownfield exploration', priceLabel: '$1.8M–3.5M', priceVal: 2500000, status: 'Live' });
-  items.push({ id: 'PAM-ZM-0003', name: 'Mumbwa Cu-Co Tenement', country: 'Zambia', region: 'East Africa', district: 'Mumbwa, Central Province', commodity: 'Cobalt', family: 'Base metals', licence: 'Exploration licence', area: 920, stage: 'Greenfield exploration', priceLabel: '$0.9M–1.8M', priceVal: 1300000, status: 'Live' });
-  items.push({ id: 'PAM-ZM-0004', name: 'Lufwanyama Cu Block', country: 'Zambia', region: 'East Africa', district: 'Lufwanyama, Copperbelt', commodity: 'Copper', family: 'Base metals', licence: 'Large-scale mining licence', area: 1810, stage: 'Pre-feasibility', priceLabel: '$14M–28M', priceVal: 20000000, status: 'Live' });
+  items.push({ id: 'PAM-ZM-0001', name: 'Solwezi NW Cu Block', country: 'Zambia', region: 'Southern Africa', district: 'Solwezi District, NW Province', commodity: 'Copper', family: 'Base metals', licence: 'Large-scale mining licence', area: 1240, stage: 'Resource definition', priceLabel: '$7M–14M', priceVal: 10000000, status: 'Live' });
+  items.push({ id: 'PAM-ZM-0002', name: 'Chingola Copperbelt Concession', country: 'Zambia', region: 'Southern Africa', district: 'Chingola, Copperbelt', commodity: 'Copper', family: 'Base metals', licence: 'Exploration licence', area: 680, stage: 'Brownfield exploration', priceLabel: '$1.8M–3.5M', priceVal: 2500000, status: 'Live' });
+  items.push({ id: 'PAM-ZM-0003', name: 'Mumbwa Cu-Co Tenement', country: 'Zambia', region: 'Southern Africa', district: 'Mumbwa, Central Province', commodity: 'Cobalt', family: 'Base metals', licence: 'Exploration licence', area: 920, stage: 'Greenfield exploration', priceLabel: '$0.9M–1.8M', priceVal: 1300000, status: 'Live' });
+  items.push({ id: 'PAM-ZM-0004', name: 'Lufwanyama Cu Block', country: 'Zambia', region: 'Southern Africa', district: 'Lufwanyama, Copperbelt', commodity: 'Copper', family: 'Base metals', licence: 'Large-scale mining licence', area: 1810, stage: 'Pre-feasibility', priceLabel: '$14M–28M', priceVal: 20000000, status: 'Live' });
   for (let i = 0; i < 40; i++) {
     const c = pick(SAMPLE_COUNTRIES);
     const family = pick(FAMILIES);
