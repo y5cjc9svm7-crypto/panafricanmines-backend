@@ -173,7 +173,7 @@ export async function listForOperator(filters) {
     [...params, filters.limit, offset]
   );
   const countsQ = await query(`SELECT status, count(*)::int AS c FROM listings GROUP BY status`);
-  const counts = { 'Pending review': 0, Live: 0, 'Under offer': 0, Closed: 0, Declined: 0 };
+  const counts = { 'Pending review': 0, Live: 0, 'Under offer': 0, Closed: 0, Declined: 0, Withdrawn: 0 };
   for (const r of countsQ.rows) counts[r.status] = r.c;
 
   return { items: rowsQ.rows.map(toOperator), total: totalQ.rows[0].c, page: filters.page, limit: filters.limit, counts };
@@ -199,6 +199,7 @@ const TRANSITIONS = {
   publish: { from: ['Pending review'], to: 'Live' },
   decline: { from: ['Pending review'], to: 'Declined' },
   offer: { from: ['Live'], to: 'Under offer' },
+  withdraw: { from: ['Pending review', 'Live', 'Under offer'], to: 'Withdrawn' },
   close: { from: ['Under offer'], to: 'Closed' },
 };
 
@@ -230,6 +231,9 @@ export async function transition(id, action, operator, opts = {}) {
       params = [id, opts.reason || null];
     } else if (action === 'offer') {
       sql = `UPDATE listings SET status='Under offer' WHERE id=$1 RETURNING *`;
+      params = [id];
+    } else if (action === 'withdraw') {
+      sql = `UPDATE listings SET status='Withdrawn' WHERE id=$1 RETURNING *`;
       params = [id];
     } else {
       // close: invoice the matching fee
@@ -263,4 +267,19 @@ export async function transition(id, action, operator, opts = {}) {
   }
 
   return toOperator(updated);
+}
+
+// ── Hard delete (operator) ──────────────────────────────────────
+// Permanently removes a listing AND, via ON DELETE CASCADE, its engagement
+// letter (signature), contact requests and alert-notification records.
+// A deletion record is written to the audit log (no FK to listings, so it
+// survives the delete). This is irreversible.
+export async function deleteListing(id, operator) {
+  return withTransaction(async (client) => {
+    const { rows } = await client.query('SELECT id, name, status FROM listings WHERE id = $1 FOR UPDATE', [id]);
+    if (!rows.length) throw new HttpError(404, 'Listing not found');
+    await audit(client, operator, 'delete', id, { name: rows[0].name, status: rows[0].status });
+    await client.query('DELETE FROM listings WHERE id = $1', [id]);
+    return { deleted: true, id };
+  });
 }
