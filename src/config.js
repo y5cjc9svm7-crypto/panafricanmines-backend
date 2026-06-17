@@ -52,7 +52,11 @@ const config = {
     opsNotify: process.env.OPS_NOTIFY_EMAIL || '',
   },
 
-  publicSiteUrl: (process.env.PUBLIC_SITE_URL || 'https://panafricanmines.com').replace(/\/+$/, ''),
+  publicSiteUrl: (() => {
+    let u = (process.env.PUBLIC_SITE_URL || 'https://panafricanmines.com').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u.replace(/^\/+/, '');  // ensure scheme so email links are absolute
+    return u;
+  })(),
 
   rateLimit: {
     windowMs: num(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
