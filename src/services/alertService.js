@@ -84,7 +84,14 @@ export async function notifyAlertsForListing(listing) {
         );
         if (!claim.rowCount) return;
         const mail = alertMatchEmail(alert, listing);
-        await sendMail({ to: alert.email, ...mail });
+        const result = await sendMail({ to: alert.email, ...mail });
+        // Only KEEP the "notified" claim if the email was actually delivered.
+        // If sending failed (or was skipped), throw so the transaction rolls
+        // back and the claim is removed — this alert can then be retried later
+        // instead of being silently marked as already notified.
+        if (!result || result.error || result.skipped) {
+          throw new Error('Alert email was not delivered');
+        }
         sent++;
       });
     } catch (err) {
