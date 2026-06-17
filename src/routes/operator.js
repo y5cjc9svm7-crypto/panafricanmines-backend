@@ -6,7 +6,7 @@ import {
   operatorListingQuerySchema, declineSchema, closeSchema,
 } from '../validators/schemas.js';
 import {
-  listForOperator, getForOperator, transition, toOperator,
+  listForOperator, getForOperator, transition, toOperator, deleteListing,
 } from '../services/listingService.js';
 import { operatorStats } from '../services/statsService.js';
 import { listContactRequests } from '../services/contactService.js';
@@ -64,6 +64,18 @@ router.post(
       })
     )
   )
+);
+
+router.post(
+  '/listings/:id/withdraw',
+  asyncHandler(async (req, res) =>
+    res.json(await transition(req.params.id, 'withdraw', req.operator))
+  )
+);
+
+router.delete(
+  '/listings/:id',
+  asyncHandler(async (req, res) => res.json(await deleteListing(req.params.id, req.operator)))
 );
 
 router.get(
