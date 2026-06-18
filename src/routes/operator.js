@@ -73,6 +73,13 @@ router.post(
   )
 );
 
+router.post(
+  '/listings/:id/restore',
+  asyncHandler(async (req, res) =>
+    res.json(await transition(req.params.id, 'restore', req.operator))
+  )
+);
+
 router.delete(
   '/listings/:id',
   asyncHandler(async (req, res) => res.json(await deleteListing(req.params.id, req.operator)))
