@@ -200,6 +200,9 @@ const TRANSITIONS = {
   decline: { from: ['Pending review'], to: 'Declined' },
   offer: { from: ['Live'], to: 'Under offer' },
   withdraw: { from: ['Pending review', 'Live', 'Under offer'], to: 'Withdrawn' },
+  // Undo a withdrawal. The target status is resolved at runtime from the
+  // status the listing held before it was withdrawn (see the restore branch).
+  restore: { from: ['Withdrawn'] },
   close: { from: ['Under offer'], to: 'Closed' },
 };
 
@@ -222,7 +225,7 @@ export async function transition(id, action, operator, opts = {}) {
       throw new HttpError(409, `Cannot ${action} a listing that is "${cur.status}". Allowed from: ${rule.from.join(', ')}.`);
     }
 
-    let sql, params;
+    let sql, params, restoredTo;
     if (action === 'publish') {
       sql = `UPDATE listings SET status='Live', published_at=now(), decline_reason=NULL WHERE id=$1 RETURNING *`;
       params = [id];
@@ -233,8 +236,23 @@ export async function transition(id, action, operator, opts = {}) {
       sql = `UPDATE listings SET status='Under offer' WHERE id=$1 RETURNING *`;
       params = [id];
     } else if (action === 'withdraw') {
-      sql = `UPDATE listings SET status='Withdrawn' WHERE id=$1 RETURNING *`;
+      // Remember the current status so the withdrawal can be undone later.
+      sql = `UPDATE listings SET prev_status=status, status='Withdrawn' WHERE id=$1 RETURNING *`;
       params = [id];
+    } else if (action === 'restore') {
+      // Undo a withdrawal: put the listing back to the exact status it held
+      // before it was withdrawn. Withdrawals made before this feature existed
+      // have no recorded prior status, so they default to 'Live'. When the
+      // target is 'Live', published_at is (re)set if it was never published.
+      const RESTORABLE = ['Pending review', 'Live', 'Under offer'];
+      restoredTo = RESTORABLE.includes(cur.prev_status) ? cur.prev_status : 'Live';
+      if (restoredTo === 'Live') {
+        sql = `UPDATE listings SET status='Live', prev_status=NULL, published_at=COALESCE(published_at, now()) WHERE id=$1 RETURNING *`;
+        params = [id];
+      } else {
+        sql = `UPDATE listings SET status=$2, prev_status=NULL WHERE id=$1 RETURNING *`;
+        params = [id, restoredTo];
+      }
     } else {
       // close: invoice the matching fee
       const basis = opts.transactionValue != null ? opts.transactionValue : Number(cur.price_val || 0);
@@ -244,7 +262,7 @@ export async function transition(id, action, operator, opts = {}) {
     }
 
     const res = await client.query(sql, params);
-    await audit(client, operator, action, id, opts);
+    await audit(client, operator, action, id, action === 'restore' ? { to: restoredTo } : opts);
     return res.rows[0];
   });
 
