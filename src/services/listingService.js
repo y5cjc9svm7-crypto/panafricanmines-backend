@@ -41,6 +41,7 @@ export function toOperator(row) {
     contactEmail: row.contact_email,
     feeInvoiced: row.fee_invoiced == null ? null : Number(row.fee_invoiced),
     declineReason: row.decline_reason,
+    viewCount: row.view_count == null ? 0 : Number(row.view_count),
     updatedAt: row.updated_at,
     closedAt: row.closed_at,
   };
@@ -103,6 +104,16 @@ export async function getPublicById(id) {
   const { rows } = await query(`SELECT * FROM listings WHERE id = $1 AND status = ANY($2)`, [id, PUBLIC_STATUSES]);
   if (!rows.length) throw new HttpError(404, 'Listing not found');
   return toPublic(rows[0]);
+}
+
+// Increment the public "watched" counter for a listing. Only publicly visible
+// listings are counted. Never throws: a failed count must not break the page
+// the visitor is looking at.
+export async function recordView(id) {
+  await query(
+    `UPDATE listings SET view_count = view_count + 1 WHERE id = $1 AND status = ANY($2)`,
+    [id, PUBLIC_STATUSES]
+  );
 }
 
 // ── Submission ("Sell an asset") ────────────────────────────────────────
