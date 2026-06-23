@@ -5,15 +5,12 @@ import { writeLimiter } from '../middleware/rateLimit.js';
 import {
   listingQuerySchema, createListingSchema, contactRequestSchema,
 } from '../validators/schemas.js';
-import { listPublic, getPublicById, createListing } from '../services/listingService.js';
+import { listPublic, getPublicById, createListing, recordView } from '../services/listingService.js';
 import { createContactRequest } from '../services/contactService.js';
-
 const router = Router();
-
 function meta(req) {
   return { ip: req.ip, userAgent: req.get('user-agent') };
 }
-
 // Public search
 router.get(
   '/',
@@ -22,7 +19,6 @@ router.get(
     res.json(await listPublic(req.query));
   })
 );
-
 // Single public listing
 router.get(
   '/:id',
@@ -30,7 +26,15 @@ router.get(
     res.json(await getPublicById(req.params.id));
   })
 );
-
+// Count a public "watched" event (operator-only counter). Fire-and-forget from
+// the frontend; just bumps the counter and returns 204 No Content.
+router.post(
+  '/:id/view',
+  asyncHandler(async (req, res) => {
+    await recordView(req.params.id);
+    res.status(204).end();
+  })
+);
 // Submit a new listing ("Sell an asset")
 router.post(
   '/',
@@ -41,7 +45,6 @@ router.post(
     res.status(201).json(listing);
   })
 );
-
 // Buyer "Request contact"
 router.post(
   '/:id/contact-requests',
@@ -52,5 +55,4 @@ router.post(
     res.status(201).json(result);
   })
 );
-
 export default router;
