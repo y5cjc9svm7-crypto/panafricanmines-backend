@@ -8,6 +8,7 @@ import { resolveCommodityFamily, resolveCountry, getReference } from './referenc
 import { notifyAlertsForListing } from './alertService.js';
 import { sendMail } from '../lib/mailer.js';
 import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail } from './emailTemplates.js';
+import { getReferrerByCode } from './referrerService.js';
 
 const PUBLIC_STATUSES = ['Live', 'Under offer'];
 
@@ -42,6 +43,8 @@ export function toOperator(row) {
     feeInvoiced: row.fee_invoiced == null ? null : Number(row.fee_invoiced),
     declineReason: row.decline_reason,
     viewCount: row.view_count == null ? 0 : Number(row.view_count),
+    referralCode: row.referral_code || null,
+    referralFlag: row.referral_flag || null,
     updatedAt: row.updated_at,
     closedAt: row.closed_at,
   };
@@ -114,6 +117,40 @@ export async function recordView(id) {
     `UPDATE listings SET view_count = view_count + 1 WHERE id = $1 AND status = ANY($2)`,
     [id, PUBLIC_STATUSES]
   );
+}
+
+// Attach a referrer's code to a listing, once, at submission. Hard-blocks an
+// exact self-referral (referrer email == lister contact email). Records a
+// non-blocking review flag for soft signals (e.g. same originating IP) that the
+// operator can check before any payout. The referral is immutable once set.
+export async function attachReferral(listingId, code, meta = {}) {
+  const referrer = await getReferrerByCode(code);
+  if (!referrer) throw new HttpError(404, 'Referral code not found');
+
+  const { rows } = await query(
+    `SELECT id, contact_email, referrer_id FROM listings WHERE id = $1`,
+    [listingId]
+  );
+  const listing = rows[0];
+  if (!listing) throw new HttpError(404, 'Listing not found');
+  if (listing.referrer_id) throw new HttpError(409, 'This listing already has a referral code');
+
+  if (
+    listing.contact_email &&
+    listing.contact_email.trim().toLowerCase() === String(referrer.email).trim().toLowerCase()
+  ) {
+    throw new HttpError(400, 'The referrer cannot be the same person listing this asset');
+  }
+
+  const flags = [];
+  if (meta.ip && referrer.reg_ip && meta.ip === referrer.reg_ip) flags.push('same-ip');
+  const flag = flags.length ? flags.join(',') : null;
+
+  await query(
+    `UPDATE listings SET referrer_id = $2, referral_code = $3, referral_flag = $4 WHERE id = $1`,
+    [listingId, referrer.id, referrer.code, flag]
+  );
+  return { attached: true, code: referrer.code, flag };
 }
 
 // ── Submission ("Sell an asset") ────────────────────────────────────────
