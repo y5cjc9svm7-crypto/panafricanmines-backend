@@ -185,3 +185,88 @@ export function listingPublishedEmail(listing) {
 
   return { subject, text, html };
 }
+// ============================================================================
+//  ADD THESE TWO FUNCTIONS TO THE END of src/services/emailTemplates.js
+//  (paste everything below this line after the last existing function).
+//  They reuse the `layout` helper and `site` constant already defined at the
+//  top of that file, so they must live in the same file.
+// ============================================================================
+
+export function referrerWelcomeEmail(referrer) {
+  const name = referrer.full_name || referrer.name || '';
+  const code = referrer.code;
+  const subject = `Your PanAfricanMines referral code: ${code}`;
+
+  const text =
+    `Hello${name ? ' ' + name : ''},\n\n` +
+    `You're in. Your referral code is:\n\n  ${code}\n\n` +
+    `Share this code with anyone listing an asset on PanAfricanMines. When an asset listed with your code is sold through the platform, you earn 20% of the commission StraMin receives on that sale, paid once the money has cleared.\n\n` +
+    `Key points:\n` +
+    `- A listing can carry only one code, captured once at the time of listing.\n` +
+    `- You cannot refer an asset you are listing yourself.\n` +
+    `- Before any payout we verify identity and age, and you provide payout and tax details.\n\n` +
+    `Please keep this email as a record of your code. The full referral programme terms apply and are governed by the laws of Zambia.\n\n` +
+    `Kind regards,\nPanAfricanMines\nby StraMin Africa Zambia Limited\n\n` +
+    `------------------------------------------------------------\n\n` +
+    `Bonjour${name ? ' ' + name : ''},\n\n` +
+    `C'est fait. Votre code de parrainage est :\n\n  ${code}\n\n` +
+    `Partagez ce code avec toute personne deposant un actif sur PanAfricanMines. Lorsqu'un actif depose avec votre code est vendu via la plateforme, vous gagnez 20% de la commission percue par StraMin sur cette vente, payee une fois les fonds recus.\n\n` +
+    `Points cles :\n` +
+    `- Une annonce ne peut porter qu'un seul code, enregistre une seule fois au moment du depot.\n` +
+    `- Vous ne pouvez pas parrainer un actif que vous deposez vous-meme.\n` +
+    `- Avant tout paiement, nous verifions l'identite et l'age, et vous fournissez vos coordonnees de paiement et fiscales.\n\n` +
+    `Veuillez conserver cet e-mail comme preuve de votre code. Les conditions completes du programme de parrainage s'appliquent et sont regies par le droit de la Zambie.\n\n` +
+    `Cordialement,\nPanAfricanMines\npar StraMin Africa Zambia Limited`;
+
+  const codeBox = `<div style="font-size:26px;font-weight:700;letter-spacing:3px;background:#F2EEE7;border:1px solid #D8CFC0;padding:16px;text-align:center;margin:12px 0;color:#221C18">${code}</div>`;
+
+  const en = `<p style="font-size:14px;line-height:1.6">You're in${name ? ', ' + name : ''}. Here is your referral code:</p>
+     ${codeBox}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620">Share this code with anyone listing an asset on PanAfricanMines. When an asset listed with your code is sold through the platform, you earn <strong>20%</strong> of the commission StraMin receives on that sale, paid once the money has cleared.</p>
+     <ul style="font-size:13px;color:#7A7064;line-height:1.7;padding-left:18px">
+       <li>A listing can carry only one code, captured once at the time of listing.</li>
+       <li>You cannot refer an asset you are listing yourself.</li>
+       <li>Before any payout we verify identity and age; you provide payout and tax details.</li>
+     </ul>
+     <p style="font-size:13px;color:#7A7064">Please keep this email as a record of your code. The full referral programme terms apply (governed by the laws of Zambia).</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Kind regards,<br>PanAfricanMines<br>by StraMin Africa Zambia Limited</p>`;
+
+  const fr = `<p style="font-size:14px;line-height:1.6">C'est fait${name ? ', ' + name : ''}. Voici votre code de parrainage :</p>
+     ${codeBox}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620">Partagez ce code avec toute personne deposant un actif sur PanAfricanMines. Lorsqu'un actif depose avec votre code est vendu via la plateforme, vous gagnez <strong>20%</strong> de la commission percue par StraMin sur cette vente, payee une fois les fonds recus.</p>
+     <ul style="font-size:13px;color:#7A7064;line-height:1.7;padding-left:18px">
+       <li>Une annonce ne peut porter qu'un seul code, enregistre une seule fois au moment du depot.</li>
+       <li>Vous ne pouvez pas parrainer un actif que vous deposez vous-meme.</li>
+       <li>Avant tout paiement, nous verifions l'identite et l'age ; vous fournissez vos coordonnees de paiement et fiscales.</li>
+     </ul>
+     <p style="font-size:13px;color:#7A7064">Veuillez conserver cet e-mail comme preuve de votre code. Les conditions completes du programme de parrainage s'appliquent (regies par le droit de la Zambie).</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Cordialement,<br>PanAfricanMines<br>par StraMin Africa Zambia Limited</p>`;
+
+  const html = layout(
+    'Your referral code · Votre code de parrainage',
+    `${en}<hr style="border:none;border-top:1px solid #D8CFC0;margin:24px 0">${fr}`
+  );
+
+  return { subject, text, html };
+}
+
+export function newReferrerOpsEmail(referrer) {
+  const url = `${site}/#/operator`;
+  const name = referrer.full_name || referrer.name || '';
+  const subject = `[Referral programme] New referrer: ${name || referrer.email} (${referrer.code})`;
+  const text =
+    `A new referrer has registered for the referral programme.\n\n` +
+    `Code: ${referrer.code}\nName: ${name || '-'}\nEmail: ${referrer.email || '-'}\nCountry: ${referrer.country || '-'}\n\n` +
+    `See all referrers in the back-office: ${url}`;
+  const html = layout(
+    'New referrer registered',
+    `<p style="font-size:14px">A new referrer has joined the referral programme.</p>
+     <div style="border:1px solid #D8CFC0;padding:16px;margin:12px 0">
+       <div style="font-size:16px;font-weight:700;color:#221C18">${name || referrer.email}</div>
+       <div style="font-size:13px;color:#7A7064">Code: ${referrer.code}</div>
+       <div style="font-size:13px;color:#7A7064">${referrer.email || '-'}${referrer.country ? ' · ' + referrer.country : ''}</div>
+     </div>
+     <p><a href="${url}" style="background:#221C18;color:#fff;text-decoration:none;padding:11px 20px;display:inline-block">Open back-office</a></p>`
+  );
+  return { subject, text, html };
+}
