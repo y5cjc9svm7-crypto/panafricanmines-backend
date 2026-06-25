@@ -1,6 +1,9 @@
 import { query } from '../db/pool.js';
 import { HttpError } from '../middleware/error.js';
 import { uuid } from '../lib/ids.js';
+import config from '../config.js';
+import { sendMail } from '../lib/mailer.js';
+import { referrerWelcomeEmail, newReferrerOpsEmail } from './emailTemplates.js';
 
 // Code alphabet without easily-confused characters (no 0/O, 1/I, etc.).
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -19,7 +22,6 @@ export async function registerReferrer(input = {}, meta = {}) {
   const name = String(input.fullName || input.name || '').trim();
   const email = String(input.email || '').trim();
   const country = String(input.country || '').trim() || null;
-
   if (!name) throw new HttpError(400, 'Your name is required');
   if (!EMAIL_RE.test(email)) throw new HttpError(400, 'A valid email is required');
   if (input.ageConfirmed !== true) throw new HttpError(400, 'You must confirm you are at least 18 years old');
@@ -29,6 +31,7 @@ export async function registerReferrer(input = {}, meta = {}) {
     `SELECT code FROM referrers WHERE lower(email) = lower($1) AND status = 'active' LIMIT 1`,
     [email]
   );
+  // Reusing an existing code is not a new registration, so no email is resent.
   if (existing.rows.length) return { code: existing.rows[0].code, reused: true };
 
   let code = null;
@@ -45,6 +48,19 @@ export async function registerReferrer(input = {}, meta = {}) {
      VALUES ($1,$2,$3,$4,$5,TRUE,$6,now(),$7,$8)`,
     [uuid(), code, name, email, country, input.termsVersion || null, meta.ip || null, meta.userAgent || null]
   );
+
+  // Fire-and-forget notifications. Email is best-effort: the code is already
+  // saved and returned below, so a mail failure must never block registration.
+  try {
+    const referrer = { code, full_name: name, email, country };
+    sendMail({ to: email, ...referrerWelcomeEmail(referrer) });            // welcome the referrer
+    if (config.mail.opsNotify) {
+      sendMail({ to: config.mail.opsNotify, ...newReferrerOpsEmail(referrer) }); // notify the operator
+    }
+  } catch (e) {
+    /* ignore: notifications are best-effort */
+  }
+
   return { code, reused: false };
 }
 
