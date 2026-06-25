@@ -32,6 +32,8 @@ export function toPublic(row) {
     verified: row.verified === true,
     createdAt: row.created_at,
     publishedAt: row.published_at,
+    // NOTE: jointVenture is intentionally NOT exposed publicly. If you ever want
+    // buyers to see it, add:  jointVenture: row.joint_venture,
   };
 }
 
@@ -40,6 +42,7 @@ export function toOperator(row) {
   return {
     ...toPublic(row),
     contactEmail: row.contact_email,
+    jointVenture: row.joint_venture,          // true = Yes, false = No, null = not answered
     feeInvoiced: row.fee_invoiced == null ? null : Number(row.fee_invoiced),
     declineReason: row.decline_reason,
     viewCount: row.view_count == null ? 0 : Number(row.view_count),
@@ -167,17 +170,22 @@ export async function createListing(input, meta = {}) {
   const priceVal = priceBandToValue(input.price);
   const areaHa = parseAreaHa(input.area);
 
+  // "Open for joint venture": 'Yes' -> true, 'No' -> false, anything else -> null
+  // (null = "not answered", which keeps the field fully optional/backward-safe).
+  const jointVenture =
+    input.jointVenture === 'Yes' ? true : input.jointVenture === 'No' ? false : null;
+
   const listing = await withTransaction(async (client) => {
     const id = await nextListingId(client, cc);
     const insert = await client.query(
       `INSERT INTO listings
         (id, name, asset_type, commodity, family, country, region, district, licence,
-         area_ha, stage, price_label, price_val, status, contact_email)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Pending review',$14)
+         area_ha, stage, price_label, price_val, status, contact_email, joint_venture)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Pending review',$14,$15)
        RETURNING *`,
       [id, name, input.assetType, input.commodity, family, input.country, region,
        input.location, input.licence, areaHa, input.stage || null,
-       input.price || null, priceVal, input.email || null]
+       input.price || null, priceVal, input.email || null, jointVenture]
     );
     await client.query(
       `INSERT INTO engagement_letters
