@@ -136,6 +136,74 @@ router.get(
   })
 );
 
+// ── Edit / delete a referrer (operator) ─────────────────────────────────
+// Editable: name, email, country, status. The code is intentionally NOT
+// editable (it is stamped onto listings and is how attribution works).
+// A blank text field means "leave unchanged". Setting status to 'inactive'
+// is a safe soft-delete: the record is kept but the code can no longer be used
+// on new listings (getReferrerByCode only matches active referrers).
+const editReferrerSchema = z
+  .object({
+    fullName: z.string().trim().max(200).optional(),
+    email: z.string().trim().email().max(160).optional().or(z.literal('')),
+    country: z.string().trim().max(80).optional(),
+    status: z.enum(['active', 'inactive']).optional(),
+  })
+  .strip();
+
+const REF_EDIT_COLS = {
+  fullName: 'full_name', email: 'email', country: 'country', status: 'status',
+};
+
+router.post(
+  '/referrers/:id/edit',
+  validate(editReferrerSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const patch = req.body;
+    const sets = [];
+    const params = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(REF_EDIT_COLS)) {
+      if (patch[key] === undefined) continue;
+      let val = patch[key];
+      if (typeof val === 'string') { val = val.trim(); if (val === '') continue; } // blank = no change
+      sets.push(`${col} = $${i++}`);
+      params.push(val);
+    }
+    if (!sets.length) {
+      const cur = await query('SELECT id FROM referrers WHERE id = $1', [id]);
+      if (!cur.rows.length) throw new HttpError(404, 'Referrer not found');
+      return res.json({ ok: true, changed: 0 });
+    }
+    params.push(id);
+    const upd = await query(
+      `UPDATE referrers SET ${sets.join(', ')} WHERE id = $${i} RETURNING id`,
+      params
+    );
+    if (!upd.rows.length) throw new HttpError(404, 'Referrer not found');
+    res.json({ ok: true, changed: sets.length });
+  })
+);
+
+// Permanently delete a referrer. Any listings that used their code keep the
+// referral_code text on record (for commission history); only the foreign-key
+// link (referrer_id) is cleared so the delete does not violate the constraint.
+router.delete(
+  '/referrers/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await withTransaction(async (client) => {
+      const exist = await client.query('SELECT id FROM referrers WHERE id = $1 FOR UPDATE', [id]);
+      if (!exist.rows.length) throw new HttpError(404, 'Referrer not found');
+      const det = await client.query('UPDATE listings SET referrer_id = NULL WHERE referrer_id = $1', [id]);
+      await client.query('DELETE FROM referrers WHERE id = $1', [id]);
+      return { detached: det.rowCount || 0 };
+    });
+    res.json({ deleted: true, id, detachedListings: result.detached });
+  })
+);
+
 // ── Edit a listing's content (operator) ─────────────────────────────────
 // All fields optional; a blank text field means "leave unchanged".
 const editListingSchema = z
