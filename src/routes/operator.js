@@ -99,6 +99,43 @@ router.get(
   })
 );
 
+// ── Referrers (operator) ────────────────────────────────────────────────
+// Every person who registered for the referral programme, with a count of how
+// many listings each has brought in and how many of those are flagged for
+// review (e.g. 'same-ip'). Operator-only (the whole router is behind
+// requireOperator), since this is personal data.
+router.get(
+  '/referrers',
+  asyncHandler(async (req, res) => {
+    const { rows } = await query(
+      `SELECT r.id, r.code, r.full_name, r.email, r.country, r.status,
+              r.terms_version, r.accepted_at, r.reg_ip, r.created_at,
+              count(l.id)::int AS listings_count,
+              count(l.id) FILTER (WHERE l.referral_flag IS NOT NULL)::int AS flagged_count
+         FROM referrers r
+         LEFT JOIN listings l ON l.referrer_id = r.id
+        GROUP BY r.id
+        ORDER BY r.created_at DESC`
+    );
+    res.json({
+      items: rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        fullName: r.full_name,
+        email: r.email,
+        country: r.country,
+        status: r.status,
+        termsVersion: r.terms_version,
+        acceptedAt: r.accepted_at,
+        regIp: r.reg_ip,
+        createdAt: r.created_at,
+        listingsCount: r.listings_count,
+        flaggedCount: r.flagged_count,
+      })),
+    });
+  })
+);
+
 // ── Edit a listing's content (operator) ─────────────────────────────────
 // All fields optional; a blank text field means "leave unchanged".
 const editListingSchema = z
