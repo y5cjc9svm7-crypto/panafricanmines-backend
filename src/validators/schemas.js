@@ -28,6 +28,10 @@ export const createListingSchema = z.object({
   area: z.string().trim().max(60).optional().or(z.literal('')),
   stage: z.string().trim().max(120).optional().or(z.literal('')),
   price: z.string().trim().max(60).optional().or(z.literal('')),
+  // "Open for joint venture" answer. OPTIONAL on purpose: a missing or empty
+  // value passes validation (so no existing or older client is ever rejected).
+  // The new front-end always sends 'Yes' or 'No'.
+  jointVenture: z.enum(['Yes', 'No']).optional().or(z.literal('')),
   email: z.string().trim().email().max(160).optional().or(z.literal('')),
   engagementLetter: z.object({
     accepted: z.literal(true),
