@@ -22,9 +22,10 @@ import { query } from '../db/pool.js';
 // different recipient (or point it at config.mail.opsNotify to reuse the ops address).
 const NOTIFY_TO = 'mark@panafricanmines.com';
 
-// Operator-only link included in the email: opens the Pending-review queue
-// (newest listing first). The #operator hash is handled by the site on load.
-const OP_QUEUE_URL = 'https://panafricanmines.com/#operator';
+// Operator-only link included in the email: opens the operator queue and jumps
+// straight to this listing's row (switches to its tab, scrolls to it, highlights
+// it). The #operator/<id> hash is handled by the site on load.
+const OP_QUEUE_BASE = 'https://panafricanmines.com/#operator/';
 
 // Sonnet gives analyst-grade reasoning (contradictions, geology, price sense).
 // Drop to 'claude-haiku-4-5-20251001' for a cheaper, lighter check; raise to
@@ -146,6 +147,7 @@ function parseReply(text) {
 function buildEmail(listing, verdict, body) {
   const flag = verdict === 'attention' ? 'NEEDS A LOOK' : 'looks fine';
   const subject = `[PAM check] ${listing.id} - ${flag}`;
+  const opUrl = OP_QUEUE_BASE + encodeURIComponent(listing.id);
 
   const text =
 `Automated sanity check on a new listing (still "Pending review").
@@ -167,7 +169,7 @@ Verdict: ${verdict.toUpperCase()}
 
 ${body}
 
-Open in operator queue (newest first): ${OP_QUEUE_URL}
+Open this listing in the operator queue: ${opUrl}
 
 ----
 Automated review, not a substitute for your own check.`;
@@ -193,7 +195,7 @@ Automated review, not a substitute for your own check.`;
     ${row('Contact', listing.contact_email || '(none)')}
   </table>
   <div style="white-space:pre-wrap;line-height:1.55;font-size:14px;border-top:1px solid #e7e0d6;padding-top:14px">${esc(body)}</div>
-  <p style="margin:18px 0 0"><a href="${esc(OP_QUEUE_URL)}" style="display:inline-block;background:#221C18;color:#F2EEE7;text-decoration:none;padding:9px 16px;border-radius:6px;font-size:14px">Open in operator queue &rarr;</a></p>
+  <p style="margin:18px 0 0"><a href="${esc(opUrl)}" style="display:inline-block;background:#221C18;color:#F2EEE7;text-decoration:none;padding:9px 16px;border-radius:6px;font-size:14px">Open this listing in the operator queue &rarr;</a></p>
   <p style="margin:16px 0 0;font-size:12px;color:#8a7f73">Automated review, not a substitute for your own check.</p>
 </div>`;
 
