@@ -9,6 +9,7 @@ import { notifyAlertsForListing } from './alertService.js';
 import { sendMail } from '../lib/mailer.js';
 import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail } from './emailTemplates.js';
 import { getReferrerByCode } from './referrerService.js';
+import { runListingSanityCheck } from './listingSanityCheck.js';
 
 const PUBLIC_STATUSES = ['Live', 'Under offer'];
 
@@ -206,6 +207,12 @@ export async function createListing(input, meta = {}) {
     const m = newSubmissionOpsEmail(listing);
     sendMail({ to: config.mail.opsNotify, ...m });
   }
+
+  // Claude-powered rough sanity check -> emails the verdict to the operator.
+  // Fire-and-forget: it never throws and never blocks submission.
+  runListingSanityCheck(listing).catch((err) =>
+    logger.error({ err, id: listing.id }, 'Listing sanity check failed to start')
+  );
 
   return toOperator(listing);
 }
