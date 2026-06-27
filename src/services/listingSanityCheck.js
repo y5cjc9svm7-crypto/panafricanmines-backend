@@ -22,6 +22,10 @@ import { query } from '../db/pool.js';
 // different recipient (or point it at config.mail.opsNotify to reuse the ops address).
 const NOTIFY_TO = 'mark@panafricanmines.com';
 
+// Operator-only link included in the email: opens the Pending-review queue
+// (newest listing first). The #operator hash is handled by the site on load.
+const OP_QUEUE_URL = 'https://panafricanmines.com/#operator';
+
 // Sonnet gives analyst-grade reasoning (contradictions, geology, price sense).
 // Drop to 'claude-haiku-4-5-20251001' for a cheaper, lighter check; raise to
 // 'claude-opus-4-8' for the deepest review at higher cost.
@@ -163,6 +167,8 @@ Verdict: ${verdict.toUpperCase()}
 
 ${body}
 
+Open in operator queue (newest first): ${OP_QUEUE_URL}
+
 ----
 Automated review, not a substitute for your own check.`;
 
@@ -187,6 +193,7 @@ Automated review, not a substitute for your own check.`;
     ${row('Contact', listing.contact_email || '(none)')}
   </table>
   <div style="white-space:pre-wrap;line-height:1.55;font-size:14px;border-top:1px solid #e7e0d6;padding-top:14px">${esc(body)}</div>
+  <p style="margin:18px 0 0"><a href="${esc(OP_QUEUE_URL)}" style="display:inline-block;background:#221C18;color:#F2EEE7;text-decoration:none;padding:9px 16px;border-radius:6px;font-size:14px">Open in operator queue &rarr;</a></p>
   <p style="margin:16px 0 0;font-size:12px;color:#8a7f73">Automated review, not a substitute for your own check.</p>
 </div>`;
 
