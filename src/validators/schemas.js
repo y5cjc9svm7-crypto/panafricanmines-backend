@@ -1,7 +1,5 @@
 import { z } from 'zod';
-
 const trimmed = (max) => z.string().trim().min(1).max(max);
-
 // Public listing query/filter
 export const listingQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -12,13 +10,11 @@ export const listingQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(24),
 });
-
 // "Sell an asset" submission. Mirrors the front-end form + engagement letter.
 const dataUrlPng = z
   .string()
   .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, 'Signature must be a PNG data URL')
   .max(2_000_000);
-
 export const createListingSchema = z.object({
   assetType: trimmed(120),
   commodity: trimmed(80),
@@ -32,6 +28,10 @@ export const createListingSchema = z.object({
   // value passes validation (so no existing or older client is ever rejected).
   // The new front-end always sends 'Yes' or 'No'.
   jointVenture: z.enum(['Yes', 'No']).optional().or(z.literal('')),
+  // First/last name of the person listing the asset. Optional at the schema
+  // level (so older clients are never rejected); the front-end requires them.
+  firstName: z.string().trim().max(120).optional().or(z.literal('')),
+  lastName: z.string().trim().max(120).optional().or(z.literal('')),
   email: z.string().trim().email().max(160).optional().or(z.literal('')),
   engagementLetter: z.object({
     accepted: z.literal(true),
@@ -39,14 +39,12 @@ export const createListingSchema = z.object({
     termsVersion: z.string().trim().max(40).default('2026-05-19'),
   }),
 });
-
 // Buyer "Request contact"
 export const contactRequestSchema = z.object({
   email: z.string().trim().email().max(160).optional().or(z.literal('')),
   name: z.string().trim().max(120).optional().or(z.literal('')),
   message: z.string().trim().max(2000).optional().or(z.literal('')),
 });
-
 // Email alert subscription
 export const createAlertSchema = z.object({
   email: z.string().trim().email().max(160),
@@ -54,24 +52,20 @@ export const createAlertSchema = z.object({
   country: z.string().trim().max(80).optional().or(z.literal('')),
   licence: z.string().trim().max(120).optional().or(z.literal('')),
 });
-
 // Operator auth
 export const loginSchema = z.object({
   email: z.string().trim().email().max(160),
   password: z.string().min(1).max(200),
 });
-
 export const operatorListingQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   status: z.enum(['Pending review', 'Live', 'Under offer', 'Closed', 'Declined', 'All']).default('All'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
-
 export const declineSchema = z.object({
   reason: z.string().trim().max(500).optional().or(z.literal('')),
 });
-
 export const closeSchema = z.object({
   // Optional: override the transaction value used for the fee (defaults to listing price_val).
   transactionValue: z.coerce.number().int().min(0).optional(),
