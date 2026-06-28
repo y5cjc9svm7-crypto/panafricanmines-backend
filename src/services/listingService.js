@@ -13,6 +13,16 @@ import { runListingSanityCheck } from './listingSanityCheck.js';
 
 const PUBLIC_STATUSES = ['Live', 'Under offer'];
 
+// Convert a positive integer to a Roman numeral (2 -> II, 3 -> III, ...).
+// Used to keep auto-generated listing names unique.
+function toRoman(n) {
+  const map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],
+               [50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let s = '';
+  for (const [v, sym] of map) { while (n >= v) { s += sym; n -= v; } }
+  return s;
+}
+
 // Map a DB row to the public API shape (camelCase; no internal fields).
 export function toPublic(row) {
   return {
@@ -166,9 +176,14 @@ export async function createListing(input, meta = {}) {
   const ref = await getReference();
   const commodityCode = ref.commodityCode[input.commodity] || input.commodity.slice(0, 2);
 
-  const name =
+  // Base name = district + commodity code + asset-type word, plus the project
+  // stage after an en dash (e.g. "Chingola Cu Brownfield – Feasibility").
+  // The stage is appended only when present, so this stays backward-safe.
+  const stageLabel = (input.stage || '').trim();
+  const baseName =
     (input.location.split(',')[0] || input.location).trim() +
-    ' ' + commodityCode + ' ' + (input.assetType.split(' ')[0] || 'Asset');
+    ' ' + commodityCode + ' ' + (input.assetType.split(' ')[0] || 'Asset') +
+    (stageLabel ? ' \u2013 ' + stageLabel : '');
 
   const priceVal = priceBandToValue(input.price);
   const areaHa = parseAreaHa(input.area);
@@ -183,6 +198,23 @@ export async function createListing(input, meta = {}) {
 
   const listing = await withTransaction(async (client) => {
     const id = await nextListingId(client, cc);
+
+    // Keep the auto-generated name unique. The first listing keeps the plain
+    // base name; any later listing that would collide gets a Roman-numeral
+    // suffix (base, then "base II", "base III", ...). URLs use the ID, not the
+    // name, so this never affects links.
+    let name = baseName;
+    const { rows: sameName } = await client.query(
+      `SELECT name FROM listings WHERE name = $1 OR name LIKE $1 || ' %'`,
+      [baseName]
+    );
+    if (sameName.some((r) => r.name === baseName)) {
+      const used = new Set(sameName.map((r) => r.name));
+      let n = 2;
+      while (used.has(baseName + ' ' + toRoman(n))) n++;
+      name = baseName + ' ' + toRoman(n);
+    }
+
     const insert = await client.query(
       `INSERT INTO listings
         (id, name, asset_type, commodity, family, country, region, district, licence,
