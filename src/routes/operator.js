@@ -108,7 +108,7 @@ router.get(
   '/referrers',
   asyncHandler(async (req, res) => {
     const { rows } = await query(
-      `SELECT r.id, r.code, r.full_name, r.email, r.country, r.status,
+      `SELECT r.id, r.code, r.full_name, r.first_name, r.last_name, r.email, r.country, r.status,
               r.terms_version, r.accepted_at, r.reg_ip, r.created_at,
               count(l.id)::int AS listings_count,
               count(l.id) FILTER (WHERE l.referral_flag IS NOT NULL)::int AS flagged_count
@@ -122,6 +122,8 @@ router.get(
         id: r.id,
         code: r.code,
         fullName: r.full_name,
+        firstName: r.first_name,
+        lastName: r.last_name,
         email: r.email,
         country: r.country,
         status: r.status,
@@ -137,23 +139,21 @@ router.get(
 );
 
 // ── Edit / delete a referrer (operator) ─────────────────────────────────
-// Editable: name, email, country, status. The code is intentionally NOT
-// editable (it is stamped onto listings and is how attribution works).
+// Editable: first/last name, email, country, status. The code is intentionally
+// NOT editable (it is stamped onto listings and is how attribution works).
 // A blank text field means "leave unchanged". Setting status to 'inactive'
 // is a safe soft-delete: the record is kept but the code can no longer be used
 // on new listings (getReferrerByCode only matches active referrers).
 const editReferrerSchema = z
   .object({
-    fullName: z.string().trim().max(200).optional(),
+    firstName: z.string().trim().max(120).optional(),
+    lastName: z.string().trim().max(120).optional(),
+    fullName: z.string().trim().max(200).optional(),   // legacy single-name, still accepted
     email: z.string().trim().email().max(160).optional().or(z.literal('')),
     country: z.string().trim().max(80).optional(),
     status: z.enum(['active', 'inactive']).optional(),
   })
   .strip();
-
-const REF_EDIT_COLS = {
-  fullName: 'full_name', email: 'email', country: 'country', status: 'status',
-};
 
 router.post(
   '/referrers/:id/edit',
@@ -161,21 +161,43 @@ router.post(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const patch = req.body;
+
+    // Need the current names to recompute the combined full_name when only one
+    // of first/last is being changed.
+    const cur = await query('SELECT first_name, last_name FROM referrers WHERE id = $1', [id]);
+    if (!cur.rows.length) throw new HttpError(404, 'Referrer not found');
+
     const sets = [];
     const params = [];
     let i = 1;
-    for (const [key, col] of Object.entries(REF_EDIT_COLS)) {
+
+    // Name: prefer first/last. A blank field means "leave unchanged". When
+    // either changes, first_name, last_name and the combined full_name are all
+    // kept in sync. A legacy single fullName is accepted only if no first/last
+    // were supplied.
+    const fn = typeof patch.firstName === 'string' ? patch.firstName.trim() : undefined;
+    const ln = typeof patch.lastName === 'string' ? patch.lastName.trim() : undefined;
+    if ((fn !== undefined && fn !== '') || (ln !== undefined && ln !== '')) {
+      const newFirst = (fn !== undefined && fn !== '') ? fn : (cur.rows[0].first_name || '');
+      const newLast = (ln !== undefined && ln !== '') ? ln : (cur.rows[0].last_name || '');
+      sets.push(`first_name = $${i++}`); params.push(newFirst || null);
+      sets.push(`last_name = $${i++}`); params.push(newLast || null);
+      sets.push(`full_name = $${i++}`); params.push([newFirst, newLast].filter(Boolean).join(' ') || null);
+    } else if (typeof patch.fullName === 'string' && patch.fullName.trim() !== '') {
+      sets.push(`full_name = $${i++}`); params.push(patch.fullName.trim());
+    }
+
+    // Other editable fields (blank text = no change).
+    for (const [key, col] of Object.entries({ email: 'email', country: 'country', status: 'status' })) {
       if (patch[key] === undefined) continue;
       let val = patch[key];
-      if (typeof val === 'string') { val = val.trim(); if (val === '') continue; } // blank = no change
+      if (typeof val === 'string') { val = val.trim(); if (val === '') continue; }
       sets.push(`${col} = $${i++}`);
       params.push(val);
     }
-    if (!sets.length) {
-      const cur = await query('SELECT id FROM referrers WHERE id = $1', [id]);
-      if (!cur.rows.length) throw new HttpError(404, 'Referrer not found');
-      return res.json({ ok: true, changed: 0 });
-    }
+
+    if (!sets.length) return res.json({ ok: true, changed: 0 });
+
     params.push(id);
     const upd = await query(
       `UPDATE referrers SET ${sets.join(', ')} WHERE id = $${i} RETURNING id`,
