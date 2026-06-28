@@ -195,12 +195,15 @@ export function listingPublishedEmail(listing) {
 export function referrerWelcomeEmail(referrer) {
   const name = referrer.full_name || referrer.name || '';
   const code = referrer.code;
+  const shareUrl = `${site}/?ref=${code}`;
   const subject = `Your PanAfricanMines referral code: ${code}`;
 
   const text =
     `Hello${name ? ' ' + name : ''},\n\n` +
     `You're in. Your referral code is:\n\n  ${code}\n\n` +
-    `Share this code with anyone listing an asset on PanAfricanMines. When an asset listed with your code is sold through the platform, you earn 20% of the commission StraMin receives on that sale, paid once the money has cleared.\n\n` +
+    `Your personal share link:\n\n  ${shareUrl}\n\n` +
+    `Anyone who starts a listing from this link will have your code applied automatically — they don't need to type anything.\n\n` +
+    `Share the code or the link with anyone listing an asset on PanAfricanMines. When an asset listed with your code is sold through the platform, you earn 20% of the commission StraMin receives on that sale, paid once the money has cleared.\n\n` +
     `Key points:\n` +
     `- A listing can carry only one code, captured once at the time of listing.\n` +
     `- You cannot refer an asset you are listing yourself.\n` +
@@ -210,7 +213,9 @@ export function referrerWelcomeEmail(referrer) {
     `------------------------------------------------------------\n\n` +
     `Bonjour${name ? ' ' + name : ''},\n\n` +
     `C'est fait. Votre code de parrainage est :\n\n  ${code}\n\n` +
-    `Partagez ce code avec toute personne deposant un actif sur PanAfricanMines. Lorsqu'un actif depose avec votre code est vendu via la plateforme, vous gagnez 20% de la commission percue par StraMin sur cette vente, payee une fois les fonds recus.\n\n` +
+    `Votre lien de parrainage personnel :\n\n  ${shareUrl}\n\n` +
+    `Toute personne qui commence une annonce a partir de ce lien verra votre code applique automatiquement — elle n'a rien a saisir.\n\n` +
+    `Partagez le code ou le lien avec toute personne deposant un actif sur PanAfricanMines. Lorsqu'un actif depose avec votre code est vendu via la plateforme, vous gagnez 20% de la commission percue par StraMin sur cette vente, payee une fois les fonds recus.\n\n` +
     `Points cles :\n` +
     `- Une annonce ne peut porter qu'un seul code, enregistre une seule fois au moment du depot.\n` +
     `- Vous ne pouvez pas parrainer un actif que vous deposez vous-meme.\n` +
@@ -220,8 +225,15 @@ export function referrerWelcomeEmail(referrer) {
 
   const codeBox = `<div style="font-size:26px;font-weight:700;letter-spacing:3px;background:#F2EEE7;border:1px solid #D8CFC0;padding:16px;text-align:center;margin:12px 0;color:#221C18">${code}</div>`;
 
+  const shareBoxEn = `<p style="font-size:13px;line-height:1.6;color:#2E2620;margin-top:14px">Or share your personal link — anyone who starts a listing from it has your code applied automatically, with nothing to type:</p>
+     <div style="background:#FBF4EE;border:1px solid #D8CFC0;padding:13px;text-align:center;margin:8px 0;word-break:break-all"><a href="${shareUrl}" style="color:#A8663C;font-weight:700;font-size:14px;text-decoration:none">${shareUrl}</a></div>`;
+
+  const shareBoxFr = `<p style="font-size:13px;line-height:1.6;color:#2E2620;margin-top:14px">Ou partagez votre lien personnel — toute personne qui commence une annonce a partir de ce lien verra votre code applique automatiquement, sans rien a saisir :</p>
+     <div style="background:#FBF4EE;border:1px solid #D8CFC0;padding:13px;text-align:center;margin:8px 0;word-break:break-all"><a href="${shareUrl}" style="color:#A8663C;font-weight:700;font-size:14px;text-decoration:none">${shareUrl}</a></div>`;
+
   const en = `<p style="font-size:14px;line-height:1.6">You're in${name ? ', ' + name : ''}. Here is your referral code:</p>
      ${codeBox}
+     ${shareBoxEn}
      <p style="font-size:13px;line-height:1.6;color:#2E2620">Share this code with anyone listing an asset on PanAfricanMines. When an asset listed with your code is sold through the platform, you earn <strong>20%</strong> of the commission StraMin receives on that sale, paid once the money has cleared.</p>
      <ul style="font-size:13px;color:#7A7064;line-height:1.7;padding-left:18px">
        <li>A listing can carry only one code, captured once at the time of listing.</li>
@@ -233,6 +245,7 @@ export function referrerWelcomeEmail(referrer) {
 
   const fr = `<p style="font-size:14px;line-height:1.6">C'est fait${name ? ', ' + name : ''}. Voici votre code de parrainage :</p>
      ${codeBox}
+     ${shareBoxFr}
      <p style="font-size:13px;line-height:1.6;color:#2E2620">Partagez ce code avec toute personne deposant un actif sur PanAfricanMines. Lorsqu'un actif depose avec votre code est vendu via la plateforme, vous gagnez <strong>20%</strong> de la commission percue par StraMin sur cette vente, payee une fois les fonds recus.</p>
      <ul style="font-size:13px;color:#7A7064;line-height:1.7;padding-left:18px">
        <li>Une annonce ne peut porter qu'un seul code, enregistre une seule fois au moment du depot.</li>
