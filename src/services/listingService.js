@@ -53,7 +53,9 @@ export function toPublic(row) {
 export function toOperator(row) {
   return {
     ...toPublic(row),
-    contactName: row.contact_name || null,   // full name of the person who listed the asset
+    contactFirstName: row.contact_first_name || null,
+    contactLastName: row.contact_last_name || null,
+    contactName: [row.contact_first_name, row.contact_last_name].filter(Boolean).join(' ') || null,
     contactEmail: row.contact_email,
     jointVenture: row.joint_venture,          // true = Yes, false = No, null = not answered
     feeInvoiced: row.fee_invoiced == null ? null : Number(row.fee_invoiced),
@@ -188,8 +190,9 @@ export async function createListing(input, meta = {}) {
   const priceVal = priceBandToValue(input.price);
   const areaHa = parseAreaHa(input.area);
 
-  // Full name of the person listing the asset (required by the form).
-  const contactName = input.fullName ? String(input.fullName).trim() : null;
+  // First and last name of the person listing the asset (required by the form).
+  const firstName = input.firstName ? String(input.firstName).trim() : null;
+  const lastName = input.lastName ? String(input.lastName).trim() : null;
 
   // "Open for joint venture": 'Yes' -> true, 'No' -> false, anything else -> null
   // (null = "not answered", which keeps the field fully optional/backward-safe).
@@ -218,12 +221,12 @@ export async function createListing(input, meta = {}) {
     const insert = await client.query(
       `INSERT INTO listings
         (id, name, asset_type, commodity, family, country, region, district, licence,
-         area_ha, stage, price_label, price_val, status, contact_email, joint_venture, contact_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Pending review',$14,$15,$16)
+         area_ha, stage, price_label, price_val, status, contact_email, joint_venture, contact_first_name, contact_last_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Pending review',$14,$15,$16,$17)
        RETURNING *`,
       [id, name, input.assetType, input.commodity, family, input.country, region,
        input.location, input.licence, areaHa, input.stage || null,
-       input.price || null, priceVal, input.email || null, jointVenture, contactName]
+       input.price || null, priceVal, input.email || null, jointVenture, firstName, lastName]
     );
     await client.query(
       `INSERT INTO engagement_letters
