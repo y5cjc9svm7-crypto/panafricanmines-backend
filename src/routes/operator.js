@@ -85,17 +85,88 @@ router.delete(
   asyncHandler(async (req, res) => res.json(await deleteListing(req.params.id, req.operator)))
 );
 
+// ── Buyer (contact) requests (operator) ─────────────────────────────────
+// Every buyer who requested an introduction, joined to the listing they were
+// interested in, newest first. Operator-only (the whole router is behind
+// requireOperator), since this is personal data. Returns a stable camelCase
+// shape the dashboard consumes directly.
 router.get(
   '/contact-requests',
   asyncHandler(async (req, res) => {
-    const { status, page, limit } = req.query;
+    const { rows } = await query(
+      `SELECT c.id, c.listing_id, c.buyer_email, c.buyer_name, c.message, c.status, c.created_at,
+              l.name AS listing_name
+         FROM contact_requests c
+         LEFT JOIN listings l ON l.id = c.listing_id
+        ORDER BY c.created_at DESC`
+    );
     res.json({
-      items: await listContactRequests({
-        status: status || undefined,
-        page: page ? Number(page) : 1,
-        limit: limit ? Number(limit) : 50,
-      }),
+      items: rows.map((r) => ({
+        id: r.id,
+        listingId: r.listing_id,
+        listingName: r.listing_name,
+        buyerEmail: r.buyer_email,
+        buyerName: r.buyer_name,
+        message: r.message,
+        status: r.status,
+        createdAt: r.created_at,
+      })),
     });
+  })
+);
+
+// ── Edit / delete a buyer (contact) request (operator) ──────────────────
+// Editable: buyer email, buyer name, message, status. A blank text field means
+// "leave unchanged". Status is one of New / Contacted / Closed and is always
+// applied when provided.
+const editContactRequestSchema = z
+  .object({
+    buyerEmail: z.string().trim().max(200).optional().or(z.literal('')),
+    buyerName: z.string().trim().max(200).optional().or(z.literal('')),
+    message: z.string().trim().max(5000).optional().or(z.literal('')),
+    status: z.enum(['New', 'Contacted', 'Closed']).optional(),
+  })
+  .strip();
+
+router.post(
+  '/contact-requests/:id/edit',
+  validate(editContactRequestSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const patch = req.body;
+    const sets = [];
+    const params = [];
+    let i = 1;
+    // Blank text field = leave unchanged.
+    for (const [key, col] of Object.entries({ buyerEmail: 'buyer_email', buyerName: 'buyer_name', message: 'message' })) {
+      if (patch[key] === undefined) continue;
+      const val = typeof patch[key] === 'string' ? patch[key].trim() : patch[key];
+      if (val === '') continue;
+      sets.push(`${col} = $${i++}`);
+      params.push(val);
+    }
+    // Status is always applied when provided.
+    if (patch.status !== undefined) { sets.push(`status = $${i++}`); params.push(patch.status); }
+
+    if (!sets.length) return res.json({ ok: true, changed: 0 });
+
+    params.push(id);
+    const upd = await query(
+      `UPDATE contact_requests SET ${sets.join(', ')} WHERE id = $${i} RETURNING id`,
+      params
+    );
+    if (!upd.rows.length) throw new HttpError(404, 'Contact request not found');
+    res.json({ ok: true, changed: sets.length });
+  })
+);
+
+// Permanently delete a buyer request. This cannot be undone.
+router.delete(
+  '/contact-requests/:id',
+  asyncHandler(async (req, res) => {
+    const del = await query('DELETE FROM contact_requests WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!del.rows.length) throw new HttpError(404, 'Contact request not found');
+    res.json({ deleted: true, id: req.params.id });
   })
 );
 
