@@ -8,6 +8,7 @@ import {
 import { listPublic, getPublicById, createListing, recordView, attachReferral } from '../services/listingService.js';
 import { createContactRequest } from '../services/contactService.js';
 import { registerReferrer, getReferrerByCode } from '../services/referrerService.js';
+import { query } from '../db/pool.js';
 const router = Router();
 function meta(req) {
   return { ip: req.ip, userAgent: req.get('user-agent') };
@@ -63,6 +64,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = await registerReferrer(req.body, meta(req));
     res.status(201).json(result);
+  })
+);
+// Referral programme — public count of referrers (count only, no personal data),
+// used for the "Join N referral partners already signed up" social-proof line.
+// MUST be declared BEFORE '/referrers/:code', otherwise Express would treat the
+// literal "count" as a :code value. Counts everyone not soft-deleted (inactive).
+router.get(
+  '/referrers/count',
+  asyncHandler(async (req, res) => {
+    const { rows } = await query(
+      "SELECT count(*)::int AS n FROM referrers WHERE status IS DISTINCT FROM 'inactive'"
+    );
+    res.json({ count: rows[0] ? rows[0].n : 0 });
   })
 );
 // Referral programme — check a code exists (no personal data returned).
