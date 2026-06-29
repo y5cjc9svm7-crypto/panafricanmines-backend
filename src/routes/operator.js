@@ -314,6 +314,9 @@ const editListingSchema = z
     priceLabel: z.string().trim().max(80).optional(),
     priceVal: z.coerce.number().int().min(0).optional(),
     verified: z.boolean().optional(),
+    contactFirstName: z.string().trim().max(120).optional(),
+    contactLastName: z.string().trim().max(120).optional(),
+    contactEmail: z.string().trim().max(200).optional(),
   })
   .strip();
 
@@ -322,6 +325,7 @@ const EDIT_COLS = {
   country: 'country', region: 'region', district: 'district', licence: 'licence',
   area: 'area_ha', stage: 'stage', priceLabel: 'price_label', priceVal: 'price_val',
   verified: 'verified',
+  contactFirstName: 'contact_first_name', contactLastName: 'contact_last_name', contactEmail: 'contact_email',
 };
 
 router.post(
