@@ -283,3 +283,52 @@ export function newReferrerOpsEmail(referrer) {
   );
   return { subject, text, html };
 }
+
+export function referralUsedEmail(referrer, listing) {
+  const name = referrer.full_name || [referrer.first_name, referrer.last_name].filter(Boolean).join(' ') || '';
+  const code = referrer.code;
+  const subject = `Your referral code has been used on a new listing (${listing.id})`;
+
+  const text =
+    `Hello${name ? ' ' + name : ''},\n\n` +
+    `Good news — your unique referral code ${code} has just been used on a new listing on PanAfricanMines:\n\n` +
+    `${listing.name} (${listing.id})\n${listing.commodity} \u00b7 ${listing.country}\n\n` +
+    `What this means: the listing has been recorded with your code. If and when this asset is sold through the platform, you earn 20% of the commission StraMin receives on that sale, paid once the money has cleared. No payout is due simply for the listing — your code is now captured against it, ready for when a sale completes.\n\n` +
+    `We'll keep you posted. Please keep this email as a record. The full referral programme terms apply (governed by the laws of Zambia).\n\n` +
+    `Kind regards,\nPanAfricanMines\nby StraMin Africa Zambia Limited\n\n` +
+    `------------------------------------------------------------\n\n` +
+    `Bonjour${name ? ' ' + name : ''},\n\n` +
+    `Bonne nouvelle — votre code de parrainage unique ${code} vient d'\u00eatre utilis\u00e9 pour une nouvelle annonce sur PanAfricanMines :\n\n` +
+    `${listing.name} (${listing.id})\n${listing.commodity} \u00b7 ${listing.country}\n\n` +
+    `Ce que cela signifie : l'annonce a \u00e9t\u00e9 enregistr\u00e9e avec votre code. Si et quand cet actif est vendu via la plateforme, vous gagnez 20% de la commission per\u00e7ue par StraMin sur cette vente, pay\u00e9e une fois les fonds re\u00e7us. Aucun paiement n'est d\u00fb du simple fait de l'annonce — votre code y est d\u00e9sormais associ\u00e9, pr\u00eat pour le moment o\u00f9 une vente se conclura.\n\n` +
+    `Nous vous tiendrons inform\u00e9. Veuillez conserver cet e-mail comme preuve. Les conditions compl\u00e8tes du programme de parrainage s'appliquent (r\u00e9gies par le droit de la Zambie).\n\n` +
+    `Cordialement,\nPanAfricanMines\npar StraMin Africa Zambia Limited`;
+
+  const codeBox = `<div style="font-size:22px;font-weight:700;letter-spacing:3px;background:#F2EEE7;border:1px solid #D8CFC0;padding:13px;text-align:center;margin:10px 0;color:#221C18">${code}</div>`;
+  const listingBox = `<div style="border:1px solid #D8CFC0;padding:16px;margin:12px 0">
+       <div style="font-size:11px;letter-spacing:.1em;color:#7C6A52">${listing.id}</div>
+       <div style="font-size:17px;font-weight:700;color:#221C18;margin:4px 0">${listing.name}</div>
+       <div style="font-size:13px;color:#7A7064">${listing.commodity} \u00b7 ${listing.country}</div>
+     </div>`;
+
+  const en = `<p style="font-size:14px;line-height:1.6">Good news${name ? ', ' + name : ''} — your unique referral code has just been used on a new listing on PanAfricanMines:</p>
+     ${codeBox}
+     ${listingBox}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620"><strong>What this means:</strong> the listing has been recorded with your code. If and when this asset is sold through the platform, you earn <strong>20%</strong> of the commission StraMin receives on that sale, paid once the money has cleared. No payout is due simply for the listing — your code is now captured against it, ready for when a sale completes.</p>
+     <p style="font-size:13px;color:#7A7064">We'll keep you posted. Please keep this email as a record. The full referral programme terms apply (governed by the laws of Zambia).</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Kind regards,<br>PanAfricanMines<br>by StraMin Africa Zambia Limited</p>`;
+
+  const fr = `<p style="font-size:14px;line-height:1.6">Bonne nouvelle${name ? ', ' + name : ''} — votre code de parrainage unique vient d'\u00eatre utilis\u00e9 pour une nouvelle annonce sur PanAfricanMines :</p>
+     ${codeBox}
+     ${listingBox}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620"><strong>Ce que cela signifie :</strong> l'annonce a \u00e9t\u00e9 enregistr\u00e9e avec votre code. Si et quand cet actif est vendu via la plateforme, vous gagnez <strong>20%</strong> de la commission per\u00e7ue par StraMin sur cette vente, pay\u00e9e une fois les fonds re\u00e7us. Aucun paiement n'est d\u00fb du simple fait de l'annonce — votre code y est d\u00e9sormais associ\u00e9, pr\u00eat pour le moment o\u00f9 une vente se conclura.</p>
+     <p style="font-size:13px;color:#7A7064">Nous vous tiendrons inform\u00e9. Veuillez conserver cet e-mail comme preuve. Les conditions compl\u00e8tes du programme de parrainage s'appliquent (r\u00e9gies par le droit de la Zambie).</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Cordialement,<br>PanAfricanMines<br>par StraMin Africa Zambia Limited</p>`;
+
+  const html = layout(
+    'Your referral code was used \u00b7 Votre code de parrainage a \u00e9t\u00e9 utilis\u00e9',
+    `${en}<hr style="border:none;border-top:1px solid #D8CFC0;margin:24px 0">${fr}`
+  );
+
+  return { subject, text, html };
+}
