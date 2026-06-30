@@ -7,7 +7,7 @@ import logger from '../lib/logger.js';
 import { resolveCommodityFamily, resolveCountry, getReference } from './referenceService.js';
 import { notifyAlertsForListing } from './alertService.js';
 import { sendMail } from '../lib/mailer.js';
-import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail } from './emailTemplates.js';
+import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail, referralUsedEmail } from './emailTemplates.js';
 import { getReferrerByCode } from './referrerService.js';
 import { runListingSanityCheck } from './listingSanityCheck.js';
 
@@ -378,6 +378,21 @@ export async function transition(id, action, operator, opts = {}) {
     if (updated.contact_email) {
       const m = listingPublishedEmail(updated);
       sendMail({ to: updated.contact_email, ...m });
+    }
+    // If the listing carries a referral code, let the referrer know it has gone
+    // live. 'publish' only ever fires once for a listing (nothing returns a
+    // listing to 'Pending review', and 'restore' runs a different branch), so
+    // the referrer is notified exactly once — never on a withdraw-then-restore.
+    // Fire-and-forget: a failed lookup or send never blocks or breaks publish.
+    if (updated.referral_code) {
+      getReferrerByCode(updated.referral_code)
+        .then((ref) => {
+          if (ref && ref.email) {
+            const rm = referralUsedEmail(ref, updated);
+            sendMail({ to: ref.email, ...rm });
+          }
+        })
+        .catch((err) => logger.error({ err, id }, 'Referral-used notification failed'));
     }
   }
   if (action === 'close') {
