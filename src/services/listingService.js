@@ -177,7 +177,7 @@ export async function createListing(input, meta = {}) {
   // 1) Duplicate block: the same email may not submit the same asset
   //    (country + licence + commodity + location) twice within 30 minutes.
   // 2) Rate cap: no more than 5 submissions in any 30-minute window from the
-  //    same email OR the same IP (either hitting the limit blocks the next).
+  //    same email address.
   // These run before any work so an abusive request is rejected cheaply. The
   // messages 'DUPLICATE_LISTING' / 'RATE_LIMIT' are recognised by the frontend
   // and shown to the user as friendly, localised text.
@@ -192,25 +192,14 @@ export async function createListing(input, meta = {}) {
       [emailNorm, input.country, input.licence, input.commodity, input.location]
     );
     if (dup.rows.length) throw new HttpError(409, 'DUPLICATE_LISTING');
-  }
-  let recentCount = 0;
-  if (emailNorm) {
+
     const c = await query(
       `SELECT count(*)::int AS n FROM listings
          WHERE lower(contact_email) = $1 AND created_at > now() - interval '30 minutes'`,
       [emailNorm]
     );
-    if (c.rows[0].n > recentCount) recentCount = c.rows[0].n;
+    if (c.rows[0].n >= 5) throw new HttpError(429, 'RATE_LIMIT');
   }
-  if (meta.ip) {
-    const c = await query(
-      `SELECT count(*)::int AS n FROM engagement_letters
-         WHERE ip = $1 AND signed_at > now() - interval '30 minutes'`,
-      [meta.ip]
-    );
-    if (c.rows[0].n > recentCount) recentCount = c.rows[0].n;
-  }
-  if (recentCount >= 5) throw new HttpError(429, 'RATE_LIMIT');
 
   const family = await resolveCommodityFamily(input.commodity);
   const { region, cc } = await resolveCountry(input.country);
