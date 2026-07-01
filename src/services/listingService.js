@@ -7,7 +7,7 @@ import logger from '../lib/logger.js';
 import { resolveCommodityFamily, resolveCountry, getReference } from './referenceService.js';
 import { notifyAlertsForListing } from './alertService.js';
 import { sendMail } from '../lib/mailer.js';
-import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail, referralUsedEmail } from './emailTemplates.js';
+import { listingSubmittedEmail, newSubmissionOpsEmail, listingPublishedEmail, referralUsedEmail, listingDeclinedEmail } from './emailTemplates.js';
 import { getReferrerByCode } from './referrerService.js';
 import { runListingSanityCheck } from './listingSanityCheck.js';
 
@@ -173,6 +173,45 @@ export async function attachReferral(listingId, code, meta = {}) {
 
 // ── Submission ("Sell an asset") ────────────────────────────────────────
 export async function createListing(input, meta = {}) {
+  // ── Anti-abuse guards (server-side; 30-minute rolling window) ──────────
+  // 1) Duplicate block: the same email may not submit the same asset
+  //    (country + licence + commodity + location) twice within 30 minutes.
+  // 2) Rate cap: no more than 5 submissions in any 30-minute window from the
+  //    same email OR the same IP (either hitting the limit blocks the next).
+  // These run before any work so an abusive request is rejected cheaply. The
+  // messages 'DUPLICATE_LISTING' / 'RATE_LIMIT' are recognised by the frontend
+  // and shown to the user as friendly, localised text.
+  const emailNorm = input.email ? String(input.email).trim().toLowerCase() : null;
+  if (emailNorm) {
+    const dup = await query(
+      `SELECT id FROM listings
+         WHERE lower(contact_email) = $1
+           AND country = $2 AND licence = $3 AND commodity = $4 AND district = $5
+           AND created_at > now() - interval '30 minutes'
+         LIMIT 1`,
+      [emailNorm, input.country, input.licence, input.commodity, input.location]
+    );
+    if (dup.rows.length) throw new HttpError(409, 'DUPLICATE_LISTING');
+  }
+  let recentCount = 0;
+  if (emailNorm) {
+    const c = await query(
+      `SELECT count(*)::int AS n FROM listings
+         WHERE lower(contact_email) = $1 AND created_at > now() - interval '30 minutes'`,
+      [emailNorm]
+    );
+    if (c.rows[0].n > recentCount) recentCount = c.rows[0].n;
+  }
+  if (meta.ip) {
+    const c = await query(
+      `SELECT count(*)::int AS n FROM engagement_letters
+         WHERE ip = $1 AND signed_at > now() - interval '30 minutes'`,
+      [meta.ip]
+    );
+    if (c.rows[0].n > recentCount) recentCount = c.rows[0].n;
+  }
+  if (recentCount >= 5) throw new HttpError(429, 'RATE_LIMIT');
+
   const family = await resolveCommodityFamily(input.commodity);
   const { region, cc } = await resolveCountry(input.country);
   const ref = await getReference();
@@ -299,7 +338,7 @@ export async function getForOperator(id) {
 
 // ── Status transitions ──────────────────────────────────────────────────
 const TRANSITIONS = {
-  publish: { from: ['Pending review'], to: 'Live' },
+  publish: { from: ['Pending review', 'Declined'], to: 'Live' },
   decline: { from: ['Pending review'], to: 'Declined' },
   offer: { from: ['Live'], to: 'Under offer' },
   withdraw: { from: ['Pending review', 'Live', 'Under offer'], to: 'Withdrawn' },
@@ -308,6 +347,23 @@ const TRANSITIONS = {
   restore: { from: ['Withdrawn'] },
   close: { from: ['Under offer'], to: 'Closed' },
 };
+
+// Operator-facing label stored in decline_reason (for the back-office + audit).
+// The seller-facing wording lives in emailTemplates.js (listingDeclinedEmail).
+const DECLINE_REASON_LABELS = {
+  duplicate: 'Duplicate / double entry',
+  inconsistent: 'Inconsistent or contradictory data',
+  incomplete: 'Incomplete or insufficient information',
+  licence: 'Licence details could not be verified',
+  scope: 'Outside our scope',
+  quality: 'Does not meet listing standards',
+  other: 'Other',
+};
+function declineReasonText(reasonCode, note) {
+  const label = DECLINE_REASON_LABELS[reasonCode] || DECLINE_REASON_LABELS.other;
+  const n = (note && String(note).trim()) ? String(note).trim() : '';
+  return n ? `${label} \u2014 ${n}` : label;
+}
 
 async function audit(client, operator, action, listingId, extra) {
   await client.query(
@@ -334,7 +390,7 @@ export async function transition(id, action, operator, opts = {}) {
       params = [id];
     } else if (action === 'decline') {
       sql = `UPDATE listings SET status='Declined', decline_reason=$2 WHERE id=$1 RETURNING *`;
-      params = [id, opts.reason || null];
+      params = [id, declineReasonText(opts.reasonCode, opts.note)];
     } else if (action === 'offer') {
       sql = `UPDATE listings SET status='Under offer' WHERE id=$1 RETURNING *`;
       params = [id];
@@ -393,6 +449,14 @@ export async function transition(id, action, operator, opts = {}) {
           }
         })
         .catch((err) => logger.error({ err, id }, 'Referral-used notification failed'));
+    }
+  }
+  if (action === 'decline') {
+    // Tell the seller their listing was not published, with the reason.
+    // Fire-and-forget: a failed send never breaks the decline itself.
+    if (updated.contact_email) {
+      const m = listingDeclinedEmail(updated, opts.reasonCode, opts.note);
+      sendMail({ to: updated.contact_email, ...m });
     }
   }
   if (action === 'close') {
