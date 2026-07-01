@@ -39,12 +39,18 @@ router.post(
   )
 );
 
+// Standard decline reasons (codes). Kept in sync with the frontend dropdown and
+// the seller-facing wording in emailTemplates.js. Validated inline here so the
+// note field is not silently stripped by a schema.
+const DECLINE_REASON_CODES = ['duplicate', 'inconsistent', 'incomplete', 'licence', 'scope', 'quality', 'other'];
+
 router.post(
   '/listings/:id/decline',
-  validate(declineSchema),
-  asyncHandler(async (req, res) =>
-    res.json(await transition(req.params.id, 'decline', req.operator, { reason: req.body.reason }))
-  )
+  asyncHandler(async (req, res) => {
+    const reasonCode = DECLINE_REASON_CODES.includes(req.body && req.body.reasonCode) ? req.body.reasonCode : 'other';
+    const note = (req.body && typeof req.body.note === 'string') ? req.body.note.trim().slice(0, 500) : '';
+    res.json(await transition(req.params.id, 'decline', req.operator, { reasonCode, note }));
+  })
 );
 
 router.post(
