@@ -332,3 +332,71 @@ export function referralUsedEmail(referrer, listing) {
 
   return { subject, text, html };
 }
+
+// Seller-facing explanation for each decline reason code. Kept here so the
+// wording that reaches the seller lives with the other email copy.
+const DECLINE_REASON_TEXT = {
+  duplicate:    { en: "This asset appears to have already been listed, so this entry was treated as a duplicate.", fr: "Cet actif semble avoir d\u00e9j\u00e0 \u00e9t\u00e9 d\u00e9pos\u00e9 ; cette entr\u00e9e a donc \u00e9t\u00e9 consid\u00e9r\u00e9e comme un doublon." },
+  inconsistent: { en: "Some of the details provided were inconsistent or could not be reconciled.", fr: "Certaines informations fournies \u00e9taient incoh\u00e9rentes ou n'ont pas pu \u00eatre v\u00e9rifi\u00e9es." },
+  incomplete:   { en: "The listing did not include enough information for us to publish it.", fr: "L'annonce ne comportait pas assez d'informations pour \u00eatre publi\u00e9e." },
+  licence:      { en: "We were unable to verify the licence details provided.", fr: "Nous n'avons pas pu v\u00e9rifier les informations de licence fournies." },
+  scope:        { en: "This submission falls outside the type of assets PanAfricanMines currently lists.", fr: "Cette soumission ne correspond pas au type d'actifs actuellement r\u00e9f\u00e9renc\u00e9s par PanAfricanMines." },
+  quality:      { en: "The submission did not meet our current listing standards.", fr: "La soumission ne r\u00e9pondait pas \u00e0 nos crit\u00e8res de publication actuels." },
+  other:        { en: "The submission could not be published in its current form.", fr: "La soumission n'a pas pu \u00eatre publi\u00e9e en l'\u00e9tat." },
+};
+
+export function listingDeclinedEmail(listing, reasonCode, note) {
+  const r = DECLINE_REASON_TEXT[reasonCode] || DECLINE_REASON_TEXT.other;
+  const noteClean = (note && String(note).trim()) ? String(note).trim() : '';
+  const subject = `Update on your listing submission (${listing.id})`;
+
+  const noteEnText = noteClean ? `\nNote from our team: ${noteClean}\n` : '';
+  const noteFrText = noteClean ? `\nNote de notre \u00e9quipe : ${noteClean}\n` : '';
+
+  const text =
+    `Hello,\n\n` +
+    `Thank you for submitting your asset to PanAfricanMines. After review, we were not able to publish this listing:\n\n` +
+    `${listing.name} (${listing.id})\n${listing.commodity} \u00b7 ${listing.country}\n\n` +
+    `Reason: ${r.en}\n` + noteEnText + `\n` +
+    `You are welcome to submit again with corrected or additional information, or reply to this email if you believe this was a mistake or you would like guidance.\n\n` +
+    `Kind regards,\nPanAfricanMines\nby StraMin Africa Zambia Limited\n\n` +
+    `------------------------------------------------------------\n\n` +
+    `Bonjour,\n\n` +
+    `Merci d'avoir soumis votre actif \u00e0 PanAfricanMines. Apr\u00e8s examen, nous n'avons pas pu publier cette annonce :\n\n` +
+    `${listing.name} (${listing.id})\n${listing.commodity} \u00b7 ${listing.country}\n\n` +
+    `Motif : ${r.fr}\n` + noteFrText + `\n` +
+    `Vous pouvez soumettre \u00e0 nouveau avec des informations corrig\u00e9es ou compl\u00e9mentaires, ou r\u00e9pondre \u00e0 cet e-mail si vous pensez qu'il s'agit d'une erreur ou souhaitez \u00eatre accompagn\u00e9.\n\n` +
+    `Cordialement,\nPanAfricanMines\npar StraMin Africa Zambia Limited`;
+
+  const listingBox = `<div style="border:1px solid #D8CFC0;padding:16px;margin:12px 0">
+       <div style="font-size:11px;letter-spacing:.1em;color:#7C6A52">${listing.id}</div>
+       <div style="font-size:17px;font-weight:700;color:#221C18;margin:4px 0">${listing.name}</div>
+       <div style="font-size:13px;color:#7A7064">${listing.commodity} \u00b7 ${listing.country}</div>
+     </div>`;
+
+  const reasonBox = (label, reasonText, noteLabel) =>
+    `<div style="border-left:4px solid #A8663C;background:#FBF4EE;padding:12px 16px;margin:12px 0">
+       <div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#A8663C;font-weight:700">${label}</div>
+       <div style="font-size:14px;color:#2E2620;margin-top:4px">${reasonText}</div>
+       ${noteClean ? `<div style="font-size:13px;color:#7A7064;margin-top:8px"><strong>${noteLabel}</strong> ${noteClean}</div>` : ''}
+     </div>`;
+
+  const en = `<p style="font-size:14px;line-height:1.6">Thank you for submitting your asset to PanAfricanMines. After review, we were not able to publish this listing:</p>
+     ${listingBox}
+     ${reasonBox('Reason', r.en, 'Note from our team:')}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620">You are welcome to submit again with corrected or additional information, or simply reply to this email if you believe this was a mistake or would like guidance.</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Kind regards,<br>PanAfricanMines<br>by StraMin Africa Zambia Limited</p>`;
+
+  const fr = `<p style="font-size:14px;line-height:1.6">Merci d'avoir soumis votre actif \u00e0 PanAfricanMines. Apr\u00e8s examen, nous n'avons pas pu publier cette annonce :</p>
+     ${listingBox}
+     ${reasonBox('Motif', r.fr, 'Note de notre \u00e9quipe :')}
+     <p style="font-size:13px;line-height:1.6;color:#2E2620">Vous pouvez soumettre \u00e0 nouveau avec des informations corrig\u00e9es ou compl\u00e9mentaires, ou r\u00e9pondre \u00e0 cet e-mail si vous pensez qu'il s'agit d'une erreur ou souhaitez \u00eatre accompagn\u00e9.</p>
+     <p style="font-size:13px;color:#2E2620;margin-top:16px">Cordialement,<br>PanAfricanMines<br>par StraMin Africa Zambia Limited</p>`;
+
+  const html = layout(
+    'Update on your listing \u00b7 Mise \u00e0 jour concernant votre annonce',
+    `${en}<hr style="border:none;border-top:1px solid #D8CFC0;margin:24px 0">${fr}`
+  );
+
+  return { subject, text, html };
+}
